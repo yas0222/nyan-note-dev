@@ -44,6 +44,7 @@ const sampleLogsByCat = {
       id: 1,
       date: todayKey(),
       foodTotal: 70,
+      waterTotal: 190,
       kibblePct: 70,
       wetPct: 30,
       snack: "ふつう",
@@ -56,6 +57,7 @@ const sampleLogsByCat = {
       id: 2,
       date: daysAgoKey(1),
       foodTotal: 66,
+      waterTotal: 175,
       kibblePct: 65,
       wetPct: 35,
       snack: "少なめ",
@@ -70,6 +72,7 @@ const sampleLogsByCat = {
       id: 3,
       date: todayKey(),
       foodTotal: 82,
+      waterTotal: 210,
       kibblePct: 75,
       wetPct: 25,
       snack: "少なめ",
@@ -126,6 +129,7 @@ function newLogDraft(date = todayKey()) {
   return {
     date,
     foodTotal: 70,
+    waterTotal: 180,
     kibblePct: 70,
     wetPct: 30,
     snack: "ふつう",
@@ -150,11 +154,26 @@ function validateLogForm(form) {
   const errors = [];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) errors.push("日付は必須です。");
   if (form.foodTotal < 0 || form.foodTotal > 150) errors.push("ごはん量は0〜150gで入力してください。");
+  if (form.waterTotal < 0 || form.waterTotal > 500) errors.push("水分量は0〜500mlで入力してください。");
   if (form.kibblePct < 0 || form.kibblePct > 100) errors.push("カリカリ比率は0〜100で入力してください。");
   if (form.wetPct < 0 || form.wetPct > 100) errors.push("ウェット比率は0〜100で入力してください。");
   if (form.kibblePct + form.wetPct !== 100) errors.push("カリカリとウェットの比率合計は100にしてください。");
   if (form.poop < 0 || form.poop > 20 || form.pee < 0 || form.pee > 20) errors.push("排泄回数は0〜20回で入力してください。");
   return errors;
+}
+
+function normalizeLogsByCat(logsByCat) {
+  if (!logsByCat || typeof logsByCat !== "object") return sampleLogsByCat;
+  const normalized = {};
+  for (const [catId, rows] of Object.entries(logsByCat)) {
+    normalized[catId] = Array.isArray(rows)
+      ? rows.map((row) => ({
+          ...row,
+          waterTotal: typeof row.waterTotal === "number" ? row.waterTotal : 0,
+        }))
+      : [];
+  }
+  return normalized;
 }
 
 function CatHealthApp() {
@@ -166,7 +185,7 @@ function CatHealthApp() {
       const parsed = JSON.parse(raw);
       return {
         cats: Array.isArray(parsed.cats) ? parsed.cats : sampleCats,
-        logsByCat: parsed.logsByCat && typeof parsed.logsByCat === "object" ? parsed.logsByCat : sampleLogsByCat,
+        logsByCat: normalizeLogsByCat(parsed.logsByCat),
         nextIds: parsed.nextIds || { cat: 100, log: 500 },
       };
     } catch (_e) {
@@ -414,7 +433,6 @@ function CatHealthApp() {
           <LogView
             cat={selectedCat}
             logs={data.logsByCat[selectedCat.id] || []}
-            logsByCat={data.logsByCat}
             saveLog={saveLog}
             deleteLog={deleteLog}
             cats={data.cats}
@@ -719,14 +737,90 @@ function MyCatView({ cat, log }) {
           <BigStat label="おやつ" value={log.snack} icon={<Cookie size={16} />} small />
         </div>
         <div style={cardStyle}>
-          <BigStat label="うんち / おしっこ" value={`${log.poop} / ${log.pee}回`} icon={<Droplet size={16} />} small />
+          <BigStat label="水分量" value={`${log.waterTotal}ml`} icon={<Droplet size={16} />} small />
         </div>
+      </div>
+
+      <div style={{ ...cardStyle, marginTop: 12 }}>
+        <BigStat label="うんち / おしっこ" value={`${log.poop} / ${log.pee}回`} icon={<Droplet size={16} />} small />
       </div>
     </div>
   );
 }
 
-function LogView({ cat, logs, logsByCat, saveLog, deleteLog, cats, setSelectedCat, onMoveHome }) {
+function SevenDayStatusCard({ cat, points }) {
+  const maxFood = Math.max(...points.map((p) => p.foodTotal || 0), 1);
+  const maxWater = Math.max(...points.map((p) => p.waterTotal || 0), 1);
+
+  return (
+    <div style={{ ...cardStyle, marginTop: 12 }}>
+      <Label>7日間のようす</Label>
+      <div style={{ fontSize: 11, color: palette.inkSoft, marginBottom: 10 }}>{cat.name} の過去7日間</div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {points.map((point) => {
+          if (!point.hasRecord) {
+            return (
+              <div
+                key={point.date}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "56px 1fr",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingBottom: 6,
+                  borderBottom: `1px dashed ${palette.line}`,
+                }}
+              >
+                <div style={{ fontSize: 11, color: palette.inkSoft }}>{point.date.slice(5)}</div>
+                <div style={{ fontSize: 12, color: palette.accent, fontWeight: 700 }}>未記録</div>
+              </div>
+            );
+          }
+
+          return (
+            <div
+              key={point.date}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "56px 1fr",
+                gap: 10,
+                paddingBottom: 6,
+                borderBottom: `1px dashed ${palette.line}`,
+              }}
+            >
+              <div style={{ fontSize: 11, color: palette.inkSoft, paddingTop: 2 }}>{point.date.slice(5)}</div>
+              <div style={{ display: "grid", gap: 4 }}>
+                <TrendRow label="ごはん" value={`${point.foodTotal}g`} ratio={point.foodTotal / maxFood} color={palette.accentSoft} />
+                <TrendRow label="水分" value={`${point.waterTotal}ml`} ratio={point.waterTotal / maxWater} color={palette.leaf} />
+                <div style={{ fontSize: 11, color: palette.ink }}>💩 {point.poop}回 / 💧 {point.pee}回</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TrendRow({ label, value, ratio, color }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 52px", alignItems: "center", gap: 8 }}>
+      <div style={{ fontSize: 11, color: palette.inkSoft }}>{label}</div>
+      <div style={{ height: 8, background: "#EFE6D0", borderRadius: 999, overflow: "hidden" }}>
+        <div
+          style={{
+            width: `${Math.max(0, Math.min(1, ratio)) * 100}%`,
+            height: "100%",
+            background: color,
+          }}
+        />
+      </div>
+      <div style={{ fontSize: 11, textAlign: "right", color: palette.ink }}>{value}</div>
+    </div>
+  );
+}
+
+function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHome }) {
   const [draft, setDraft] = useState(newLogDraft());
   const [editingId, setEditingId] = useState(null);
   const [errors, setErrors] = useState([]);
@@ -760,21 +854,22 @@ function LogView({ cat, logs, logsByCat, saveLog, deleteLog, cats, setSelectedCa
   };
 
   const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
-  const latteCat = cats.find((c) => c.name === "ラテ");
-  const latteRows = latteCat ? [...(logsByCat[latteCat.id] || [])].sort((a, b) => a.date.localeCompare(b.date)) : [];
-  const latteDaily = useMemo(() => {
+  const dailyPoints = useMemo(() => {
     const points = [];
     for (let i = 6; i >= 0; i -= 1) {
       const key = daysAgoKey(i);
-      const hit = latteRows.find((row) => row.date === key);
+      const hit = logs.find((row) => row.date === key);
       points.push({
         date: key,
-        foodTotal: hit?.foodTotal ?? null,
+        hasRecord: Boolean(hit),
+        foodTotal: hit?.foodTotal ?? 0,
+        waterTotal: hit?.waterTotal ?? 0,
+        poop: hit?.poop ?? 0,
+        pee: hit?.pee ?? 0,
       });
     }
     return points;
-  }, [latteRows]);
-  const maxFood = Math.max(...latteDaily.map((p) => p.foodTotal || 0), 1);
+  }, [logs]);
 
   return (
     <div>
@@ -839,6 +934,22 @@ function LogView({ cat, logs, logsByCat, saveLog, deleteLog, cats, setSelectedCa
             style={{ width: "100%", accentColor: palette.leaf, marginTop: 8 }}
           />
         </div>
+      </div>
+
+      <div style={cardStyle}>
+        <Label>💧 一日の水分量</Label>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
+          <span style={{ fontFamily: fontDisplay, fontSize: 36, fontWeight: 700, color: palette.leaf }}>{draft.waterTotal}</span>
+          <span style={{ fontSize: 14, color: palette.inkSoft }}>ml</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={500}
+          value={draft.waterTotal}
+          onChange={(e) => setDraft({ ...draft, waterTotal: +e.target.value })}
+          style={{ width: "100%", accentColor: palette.leaf }}
+        />
       </div>
 
       <div style={cardStyle}>
@@ -915,6 +1026,8 @@ function LogView({ cat, logs, logsByCat, saveLog, deleteLog, cats, setSelectedCa
           <br />
           🍚 {draft.foodTotal}g（カリカリ{draft.kibblePct}% / ウェット{draft.wetPct}%）
           <br />
+          💧 {draft.waterTotal}ml
+          <br />
           🍪 {draft.snack}
           <br />
           💩 {draft.poop}回 / 💧 {draft.pee}回
@@ -949,7 +1062,7 @@ function LogView({ cat, logs, logsByCat, saveLog, deleteLog, cats, setSelectedCa
             {lastSaved.catPhoto} {lastSaved.catName} の記録を保存しました
           </div>
           <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 6 }}>
-            {lastSaved.date} / 🍚{lastSaved.foodTotal}g / 🍪{lastSaved.snack} / 💩{lastSaved.poop} / 💧{lastSaved.pee}
+            {lastSaved.date} / 🍚{lastSaved.foodTotal}g / 💧{lastSaved.waterTotal}ml / 🍪{lastSaved.snack} / 💩{lastSaved.poop} / 💧{lastSaved.pee}
           </div>
           <button
             onClick={onMoveHome}
@@ -1003,6 +1116,7 @@ function LogView({ cat, logs, logsByCat, saveLog, deleteLog, cats, setSelectedCa
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
               <Tag>🍚 {row.foodTotal}g</Tag>
+              <Tag>💧 {row.waterTotal}ml</Tag>
               <Tag>🥣 {row.kibblePct}:{row.wetPct}</Tag>
               <Tag>🍪 {row.snack}</Tag>
               <Tag>💩 {row.poop}</Tag>
@@ -1016,29 +1130,7 @@ function LogView({ cat, logs, logsByCat, saveLog, deleteLog, cats, setSelectedCa
         ))}
       </div>
 
-      <div style={{ ...cardStyle, marginTop: 12 }}>
-        <Label>ラテの過去7日推移</Label>
-        {!latteCat && <div style={{ fontSize: 12, color: palette.inkSoft }}>「ラテ」のプロフィールがあると表示されます。</div>}
-        {latteCat && (
-          <div style={{ display: "grid", gap: 8 }}>
-            {latteDaily.map((point) => (
-              <div key={point.date} style={{ display: "grid", gridTemplateColumns: "76px 1fr 48px", alignItems: "center", gap: 8 }}>
-                <div style={{ fontSize: 11, color: palette.inkSoft }}>{point.date.slice(5)}</div>
-                <div style={{ height: 10, background: "#EFE6D0", borderRadius: 999, overflow: "hidden" }}>
-                  <div
-                    style={{
-                      width: `${point.foodTotal ? (point.foodTotal / maxFood) * 100 : 0}%`,
-                      height: "100%",
-                      background: palette.accentSoft,
-                    }}
-                  />
-                </div>
-                <div style={{ fontSize: 11, textAlign: "right", color: palette.ink }}>{point.foodTotal == null ? "—" : `${point.foodTotal}g`}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <SevenDayStatusCard cat={cat} points={dailyPoints} />
     </div>
   );
 }
