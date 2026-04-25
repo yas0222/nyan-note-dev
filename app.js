@@ -24,6 +24,7 @@ const sampleCats = [
     photo: "🐱",
     color: "#E8B86D",
     region: "千葉県浦安市",
+    currentWeightKg: 4.2,
     source: "sample",
   },
   {
@@ -34,6 +35,7 @@ const sampleCats = [
     photo: "🐈‍⬛",
     color: "#5C5048",
     region: "千葉県浦安市",
+    currentWeightKg: 5.1,
     source: "sample",
   },
 ];
@@ -50,6 +52,7 @@ const sampleLogsByCat = {
       snack: "ふつう",
       poop: 1,
       pee: 3,
+      weightKg: 4.2,
       isPrivate: false,
       source: "sample",
     },
@@ -63,6 +66,7 @@ const sampleLogsByCat = {
       snack: "少なめ",
       poop: 1,
       pee: 3,
+      weightKg: 4.1,
       isPrivate: false,
       source: "sample",
     },
@@ -78,6 +82,7 @@ const sampleLogsByCat = {
       snack: "少なめ",
       poop: 2,
       pee: 4,
+      weightKg: 5.1,
       isPrivate: true,
       source: "sample",
     },
@@ -135,8 +140,28 @@ function newLogDraft(date = todayKey()) {
     snack: "ふつう",
     poop: 1,
     pee: 3,
+    weightKg: "",
     isPrivate: false,
   };
+}
+
+function parseWeight(weight) {
+  if (weight === "" || weight === null || weight === undefined) return null;
+  const num = typeof weight === "number" ? weight : Number(weight);
+  if (!Number.isFinite(num)) return Number.NaN;
+  return Math.round(num * 10) / 10;
+}
+
+function formatWeight(weight) {
+  const parsed = parseWeight(weight);
+  if (parsed === null || Number.isNaN(parsed)) return null;
+  return parsed.toFixed(1);
+}
+
+function hasAtMostOneDecimal(weight) {
+  if (weight === "" || weight === null || weight === undefined) return true;
+  if (typeof weight === "number") return Number.isInteger(weight * 10);
+  return /^\d+(\.\d)?$/.test(weight.trim());
 }
 
 function validateCatForm(form) {
@@ -146,6 +171,12 @@ function validateCatForm(form) {
   if (!Number.isInteger(ageNum) || ageNum < 0 || ageNum > 30) errors.push("年齢は0〜30の整数で入力してください。");
   if (!["♂", "♀"].includes(form.gender)) errors.push("性別は♂または♀を選択してください。");
   if (!form.region.trim()) errors.push("地域は必須です。");
+  if (form.currentWeightKg !== "") {
+    const weight = parseWeight(form.currentWeightKg);
+    if (!hasAtMostOneDecimal(form.currentWeightKg) || Number.isNaN(weight) || weight <= 0 || weight >= 30) {
+      errors.push("現在の体重は0より大きく30未満で入力してください（小数1桁）。");
+    }
+  }
   if (!/^#[0-9A-Fa-f]{6}$/.test(form.color)) errors.push("色は#RRGGBB形式で入力してください。");
   return errors;
 }
@@ -159,6 +190,12 @@ function validateLogForm(form) {
   if (form.wetPct < 0 || form.wetPct > 100) errors.push("ウェット比率は0〜100で入力してください。");
   if (form.kibblePct + form.wetPct !== 100) errors.push("カリカリとウェットの比率合計は100にしてください。");
   if (form.poop < 0 || form.poop > 20 || form.pee < 0 || form.pee > 20) errors.push("排泄回数は0〜20回で入力してください。");
+  if (form.weightKg !== "") {
+    const weight = parseWeight(form.weightKg);
+    if (!hasAtMostOneDecimal(form.weightKg) || Number.isNaN(weight) || weight <= 0 || weight >= 30) {
+      errors.push("今日の体重は0より大きく30未満で入力してください（小数1桁）。");
+    }
+  }
   return errors;
 }
 
@@ -170,10 +207,28 @@ function normalizeLogsByCat(logsByCat) {
       ? rows.map((row) => ({
           ...row,
           waterTotal: typeof row.waterTotal === "number" ? row.waterTotal : 0,
+          weightKg: formatWeight(row.weightKg) ?? "",
         }))
       : [];
   }
   return normalized;
+}
+
+function normalizeCats(cats) {
+  if (!Array.isArray(cats)) return sampleCats;
+  return cats.map((cat) => ({
+    ...cat,
+    currentWeightKg: formatWeight(cat.currentWeightKg) ?? "",
+  }));
+}
+
+function hydrateLogDraft(log) {
+  if (!log) return newLogDraft();
+  return {
+    ...newLogDraft(log.date),
+    ...log,
+    weightKg: formatWeight(log.weightKg) ?? "",
+  };
 }
 
 function CatHealthApp() {
@@ -184,7 +239,7 @@ function CatHealthApp() {
       if (!raw) return buildInitialData();
       const parsed = JSON.parse(raw);
       return {
-        cats: Array.isArray(parsed.cats) ? parsed.cats : sampleCats,
+        cats: normalizeCats(parsed.cats),
         logsByCat: normalizeLogsByCat(parsed.logsByCat),
         nextIds: parsed.nextIds || { cat: 100, log: 500 },
       };
@@ -247,6 +302,7 @@ function CatHealthApp() {
             photo: form.photo.trim() || "🐱",
             color: form.color,
             region: form.region.trim(),
+            currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
             source: "user",
           },
         ],
@@ -272,6 +328,7 @@ function CatHealthApp() {
               photo: form.photo.trim() || "🐱",
               color: form.color,
               region: form.region.trim(),
+              currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
             }
           : cat,
       ),
@@ -292,12 +349,13 @@ function CatHealthApp() {
   };
 
   const saveLog = (catId, draft, editingId) => {
-    const errors = validateLogForm(draft);
+    const normalizedDraft = { ...draft, weightKg: formatWeight(draft.weightKg) ?? "" };
+    const errors = validateLogForm(normalizedDraft);
     if (errors.length) return { ok: false, errors };
 
     setData((prev) => {
       const rows = prev.logsByCat[catId] || [];
-      const existingByDate = rows.find((r) => r.date === draft.date);
+      const existingByDate = rows.find((r) => r.date === normalizedDraft.date);
       if (existingByDate && existingByDate.id !== editingId) {
         return prev;
       }
@@ -305,12 +363,12 @@ function CatHealthApp() {
       if (editingId) {
         nextRows = rows.map((row) =>
           row.id === editingId
-            ? { ...row, ...draft }
+            ? { ...row, ...normalizedDraft }
             : row,
         );
       } else {
         const id = prev.nextIds.log + 1;
-        nextRows = [...rows, { id, ...draft, source: "user" }];
+        nextRows = [...rows, { id, ...normalizedDraft, source: "user" }];
         return {
           ...prev,
           logsByCat: {
@@ -331,7 +389,7 @@ function CatHealthApp() {
     });
 
     const rows = data.logsByCat[catId] || [];
-    const duplicate = rows.find((r) => r.date === draft.date && r.id !== editingId);
+    const duplicate = rows.find((r) => r.date === normalizedDraft.date && r.id !== editingId);
     if (duplicate) {
       return { ok: false, errors: ["同じ日付の記録が既にあります。編集から更新してください。"] };
     }
@@ -525,10 +583,10 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
   const [showAdd, setShowAdd] = useState(false);
   const [editingCatId, setEditingCatId] = useState(null);
   const [errors, setErrors] = useState([]);
-  const [form, setForm] = useState({ name: "", age: "", gender: "♀", photo: "🐱", color: "#D9A86A", region: "" });
+  const [form, setForm] = useState({ name: "", age: "", gender: "♀", photo: "🐱", color: "#D9A86A", region: "", currentWeightKg: "" });
 
   const resetForm = () => {
-    setForm({ name: "", age: "", gender: "♀", photo: "🐱", color: "#D9A86A", region: "" });
+    setForm({ name: "", age: "", gender: "♀", photo: "🐱", color: "#D9A86A", region: "", currentWeightKg: "" });
     setErrors([]);
   };
 
@@ -543,6 +601,7 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
       photo: cat.photo,
       color: cat.color,
       region: cat.region,
+      currentWeightKg: cat.currentWeightKg ?? "",
     });
   };
 
@@ -602,6 +661,9 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
                 <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 2 }}>
                   {cat.age}歳 · {cat.region}
                 </div>
+                {cat.currentWeightKg && (
+                  <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 2 }}>体重 {cat.currentWeightKg}kg</div>
+                )}
                 <div
                   style={{
                     marginTop: 8,
@@ -648,6 +710,17 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
           </InputRow>
           <InputRow label="地域">
             <input value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} style={inputStyle} />
+          </InputRow>
+          <InputRow label="現在の体重(kg)">
+            <input
+              type="number"
+              step="0.1"
+              min="0.1"
+              max="29.9"
+              value={form.currentWeightKg}
+              onChange={(e) => setForm({ ...form, currentWeightKg: e.target.value })}
+              style={inputStyle}
+            />
           </InputRow>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <MiniButton onClick={submit}>{editingCatId ? "更新" : "追加"}</MiniButton>
@@ -724,6 +797,7 @@ function MyCatView({ cat, log }) {
         <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 4, letterSpacing: "0.1em" }}>
           {cat.age}さい · {cat.gender} · {cat.region}
         </div>
+        {cat.currentWeightKg && <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 6 }}>現在の体重 {cat.currentWeightKg}kg</div>}
       </div>
 
       <SectionLabel left="ごはん" />
@@ -751,6 +825,8 @@ function MyCatView({ cat, log }) {
 function SevenDayStatusCard({ cat, points }) {
   const maxFood = Math.max(...points.map((p) => p.foodTotal || 0), 1);
   const maxWater = Math.max(...points.map((p) => p.waterTotal || 0), 1);
+  const weightPoints = points.filter((p) => p.weightKg !== null);
+  const maxWeight = Math.max(...weightPoints.map((p) => p.weightKg), 1);
 
   return (
     <div style={{ ...cardStyle, marginTop: 12 }}>
@@ -792,6 +868,9 @@ function SevenDayStatusCard({ cat, points }) {
               <div style={{ display: "grid", gap: 4 }}>
                 <TrendRow label="ごはん" value={`${point.foodTotal}g`} ratio={point.foodTotal / maxFood} color={palette.accentSoft} />
                 <TrendRow label="水分" value={`${point.waterTotal}ml`} ratio={point.waterTotal / maxWater} color={palette.leaf} />
+                {point.weightKg !== null && (
+                  <TrendRow label="体重" value={`${point.weightKg.toFixed(1)}kg`} ratio={point.weightKg / maxWeight} color={palette.inkSoft} />
+                )}
                 <div style={{ fontSize: 11, color: palette.ink }}>💩 {point.poop}回 / 💧 {point.pee}回</div>
               </div>
             </div>
@@ -828,7 +907,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
 
   useEffect(() => {
     const today = logs.find((l) => l.date === todayKey());
-    setDraft(today ? { ...today } : newLogDraft());
+    setDraft(hydrateLogDraft(today));
     setEditingId(today?.id || null);
     setErrors([]);
   }, [cat.id, logs]);
@@ -848,7 +927,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
   };
 
   const startEdit = (log) => {
-    setDraft({ ...log });
+    setDraft(hydrateLogDraft(log));
     setEditingId(log.id);
     setErrors([]);
   };
@@ -864,6 +943,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
         hasRecord: Boolean(hit),
         foodTotal: hit?.foodTotal ?? 0,
         waterTotal: hit?.waterTotal ?? 0,
+        weightKg: hit?.weightKg === "" || hit?.weightKg == null ? null : Number(hit.weightKg),
         poop: hit?.poop ?? 0,
         pee: hit?.pee ?? 0,
       });
@@ -953,6 +1033,20 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
       </div>
 
       <div style={cardStyle}>
+        <Label>⚖️ 今日の体重（任意）</Label>
+        <input
+          type="number"
+          step="0.1"
+          min="0.1"
+          max="29.9"
+          value={draft.weightKg}
+          onChange={(e) => setDraft({ ...draft, weightKg: e.target.value })}
+          style={inputStyle}
+          placeholder="例: 4.2"
+        />
+      </div>
+
+      <div style={cardStyle}>
         <Label>🍪 おやつの量</Label>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {["なし", "少なめ", "ふつう", "多め"].map((opt) => (
@@ -1028,6 +1122,8 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
           <br />
           💧 {draft.waterTotal}ml
           <br />
+          ⚖️ {draft.weightKg === "" ? "未入力" : `${Number(draft.weightKg).toFixed(1)}kg`}
+          <br />
           🍪 {draft.snack}
           <br />
           💩 {draft.poop}回 / 💧 {draft.pee}回
@@ -1063,6 +1159,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
           </div>
           <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 6 }}>
             {lastSaved.date} / 🍚{lastSaved.foodTotal}g / 💧{lastSaved.waterTotal}ml / 🍪{lastSaved.snack} / 💩{lastSaved.poop} / 💧{lastSaved.pee}
+            {lastSaved.weightKg !== "" ? ` / ⚖️${Number(lastSaved.weightKg).toFixed(1)}kg` : ""}
           </div>
           <button
             onClick={onMoveHome}
@@ -1117,6 +1214,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
               <Tag>🍚 {row.foodTotal}g</Tag>
               <Tag>💧 {row.waterTotal}ml</Tag>
+              {row.weightKg !== "" && <Tag>⚖️ {Number(row.weightKg).toFixed(1)}kg</Tag>}
               <Tag>🥣 {row.kibblePct}:{row.wetPct}</Tag>
               <Tag>🍪 {row.snack}</Tag>
               <Tag>💩 {row.poop}</Tag>
