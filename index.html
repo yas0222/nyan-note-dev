@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>猫ヘルスMVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>猫ヘルスMVP（ローカル版）</h1>
+      <p>プロフィール登録・日次記録・地域統計をまず試せる簡易Webアプリ</p>
+    </header>
+
+    <nav class="tabs" aria-label="画面切り替え">
+      <button class="tab is-active" data-screen="profile">猫プロフィール登録</button>
+      <button class="tab" data-screen="daily-log">日次健康記録</button>
+      <button class="tab" data-screen="regional-stats">地域別統計</button>
+    </nav>
+
+    <main>
+      <section id="profile" class="screen is-active">
+        <h2>猫プロフィール登録</h2>
+        <form id="profile-form" class="card form-grid">
+          <label>
+            名前
+            <input type="text" name="name" required placeholder="例: むぎ" />
+          </label>
+          <label>
+            年齢
+            <input type="number" name="age" min="0" required />
+          </label>
+          <label>
+            性別
+            <select name="sex" required>
+              <option value="">選択してください</option>
+              <option value="male">オス</option>
+              <option value="female">メス</option>
+              <option value="unknown">不明</option>
+            </select>
+          </label>
+          <label>
+            都道府県
+            <input type="text" name="prefecture" required placeholder="例: 東京都" />
+          </label>
+          <label>
+            市区町村
+            <input type="text" name="city" required placeholder="例: 港区" />
+          </label>
+          <label>
+            公開設定
+            <select name="visibility" required>
+              <option value="public">公開</option>
+              <option value="anonymous">匿名公開</option>
+              <option value="private">非公開</option>
+            </select>
+          </label>
+          <label>
+            写真URL（任意）
+            <input type="url" name="photoUrl" placeholder="https://..." />
+          </label>
+
+          <button type="submit">プロフィールを保存</button>
+        </form>
+
+        <div class="card">
+          <h3>登録済みプロフィール</h3>
+          <ul id="cat-list" class="list"></ul>
+        </div>
+      </section>
+
+      <section id="daily-log" class="screen">
+        <h2>日次健康記録</h2>
+        <form id="daily-log-form" class="card form-grid">
+          <label>
+            対象の猫
+            <select name="catId" id="log-cat-select" required></select>
+          </label>
+          <label>
+            記録日
+            <input type="date" name="logDate" id="log-date" required />
+          </label>
+          <label>
+            1日のエサ総量（g）
+            <input type="number" name="foodTotal" min="0" step="0.1" required />
+          </label>
+          <label>
+            カリカリ比率（%）
+            <input type="number" name="dryRatio" min="0" max="100" step="0.1" required />
+          </label>
+          <label>
+            ウェット比率（%）
+            <input type="number" name="wetRatio" min="0" max="100" step="0.1" required />
+          </label>
+          <label>
+            おやつ量（g）
+            <input type="number" name="snack" min="0" step="0.1" required />
+          </label>
+          <label>
+            うんち回数
+            <input type="number" name="poopCount" min="0" step="1" required />
+          </label>
+          <label>
+            おしっこ回数
+            <input type="number" name="peeCount" min="0" step="1" required />
+          </label>
+          <label>
+            メモ（任意）
+            <textarea name="memo" rows="2" placeholder="食欲よし、よく遊んだなど"></textarea>
+          </label>
+          <button type="submit">記録を保存</button>
+        </form>
+
+        <div class="card">
+          <h3>保存済み記録（新しい順）</h3>
+          <ul id="log-list" class="list"></ul>
+        </div>
+      </section>
+
+      <section id="regional-stats" class="screen">
+        <h2>地域別統計</h2>
+        <div class="card form-grid">
+          <label>
+            統計を見る地域
+            <select id="region-select"></select>
+          </label>
+        </div>
+
+        <div class="stats-grid">
+          <article class="card stat-card"><h3>平均エサ量</h3><p id="avg-food">-</p></article>
+          <article class="card stat-card"><h3>平均カリカリ比率</h3><p id="avg-dry">-</p></article>
+          <article class="card stat-card"><h3>平均ウェット比率</h3><p id="avg-wet">-</p></article>
+          <article class="card stat-card"><h3>平均おやつ量</h3><p id="avg-snack">-</p></article>
+          <article class="card stat-card"><h3>平均うんち回数</h3><p id="avg-poop">-</p></article>
+          <article class="card stat-card"><h3>平均おしっこ回数</h3><p id="avg-pee">-</p></article>
+          <article class="card stat-card"><h3>サンプル数</h3><p id="sample-size">-</p></article>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
