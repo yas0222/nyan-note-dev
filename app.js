@@ -185,7 +185,7 @@ function validateLogForm(form) {
   const errors = [];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) errors.push("日付は必須です。");
   if (form.foodTotal < 0 || form.foodTotal > 150) errors.push("ごはん量は0〜150gで入力してください。");
-  if (form.waterTotal < 0 || form.waterTotal > 500) errors.push("水分量は0〜500mlで入力してください。");
+  if (form.waterTotal < 0 || form.waterTotal > 500) errors.push("飲水量は0〜500mlで入力してください。");
   if (form.kibblePct < 0 || form.kibblePct > 100) errors.push("カリカリ比率は0〜100で入力してください。");
   if (form.wetPct < 0 || form.wetPct > 100) errors.push("ウェット比率は0〜100で入力してください。");
   if (form.kibblePct + form.wetPct !== 100) errors.push("カリカリとウェットの比率合計は100にしてください。");
@@ -811,12 +811,12 @@ function MyCatView({ cat, log }) {
           <BigStat label="おやつ" value={log.snack} icon={<Cookie size={16} />} small />
         </div>
         <div style={cardStyle}>
-          <BigStat label="水分量" value={`${log.waterTotal}ml`} icon={<Droplet size={16} />} small />
+          <BigStat label="飲水量" value={`${log.waterTotal} ml`} icon={<Droplet size={16} />} small />
         </div>
       </div>
 
       <div style={{ ...cardStyle, marginTop: 12 }}>
-        <BigStat label="うんち / おしっこ" value={`${log.poop} / ${log.pee}回`} icon={<Droplet size={16} />} small />
+        <BigStat label="排泄" value={`うんち回数 ${log.poop}回 / おしっこ回数 ${log.pee}回`} icon={<Droplet size={16} />} small />
       </div>
     </div>
   );
@@ -867,11 +867,11 @@ function SevenDayStatusCard({ cat, points }) {
               <div style={{ fontSize: 11, color: palette.inkSoft, paddingTop: 2 }}>{point.date.slice(5)}</div>
               <div style={{ display: "grid", gap: 4 }}>
                 <TrendRow label="ごはん" value={`${point.foodTotal}g`} ratio={point.foodTotal / maxFood} color={palette.accentSoft} />
-                <TrendRow label="水分" value={`${point.waterTotal}ml`} ratio={point.waterTotal / maxWater} color={palette.leaf} />
+                <TrendRow label="飲水量" value={`${point.waterTotal}ml`} ratio={point.waterTotal / maxWater} color={palette.leaf} />
                 {point.weightKg !== null && (
                   <TrendRow label="体重" value={`${point.weightKg.toFixed(1)}kg`} ratio={point.weightKg / maxWeight} color={palette.inkSoft} />
                 )}
-                <div style={{ fontSize: 11, color: palette.ink }}>💩 {point.poop}回 / 💧 {point.pee}回</div>
+                <div style={{ fontSize: 11, color: palette.ink }}>うんち回数 {point.poop}回 / おしっこ回数 {point.pee}回</div>
               </div>
             </div>
           );
@@ -1017,7 +1017,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
       </div>
 
       <div style={cardStyle}>
-        <Label>💧 一日の水分量</Label>
+        <Label>💧 一日の飲水量</Label>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
           <span style={{ fontFamily: fontDisplay, fontSize: 36, fontWeight: 700, color: palette.leaf }}>{draft.waterTotal}</span>
           <span style={{ fontSize: 14, color: palette.inkSoft }}>ml</span>
@@ -1058,10 +1058,10 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
       </div>
 
       <div style={cardStyle}>
-        <Label>💩 うんち / 💧 おしっこ の回数</Label>
+        <Label>💩 うんち回数 / 💧 おしっこ回数</Label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 8 }}>
-          <Counter label="うんち" value={draft.poop} setValue={(v) => setDraft({ ...draft, poop: v })} />
-          <Counter label="おしっこ" value={draft.pee} setValue={(v) => setDraft({ ...draft, pee: v })} />
+          <Counter label="うんち回数" value={draft.poop} unit="回" setValue={(v) => setDraft({ ...draft, poop: v })} />
+          <Counter label="おしっこ回数" value={draft.pee} unit="回" setValue={(v) => setDraft({ ...draft, pee: v })} />
         </div>
       </div>
 
@@ -1118,15 +1118,15 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
         <div style={{ fontSize: 12, color: palette.inkSoft, lineHeight: 1.8 }}>
           📅 {draft.date}
           <br />
-          🍚 {draft.foodTotal}g（カリカリ{draft.kibblePct}% / ウェット{draft.wetPct}%）
+          ごはん量 {draft.foodTotal}g（カリカリ{draft.kibblePct}% / ウェット{draft.wetPct}%）
           <br />
-          💧 {draft.waterTotal}ml
+          飲水量 {draft.waterTotal}ml
           <br />
-          ⚖️ {draft.weightKg === "" ? "未入力" : `${Number(draft.weightKg).toFixed(1)}kg`}
+          体重 {draft.weightKg === "" ? "未入力" : `${Number(draft.weightKg).toFixed(1)}kg`}
           <br />
-          🍪 {draft.snack}
+          おやつ量 {draft.snack}
           <br />
-          💩 {draft.poop}回 / 💧 {draft.pee}回
+          うんち回数 {draft.poop}回 / おしっこ回数 {draft.pee}回
           <br />
           👀 {draft.isPrivate ? "名前を伏せて共有" : "名前ありで共有"}
         </div>
@@ -1158,8 +1158,8 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
             {lastSaved.catPhoto} {lastSaved.catName} の記録を保存しました
           </div>
           <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 6 }}>
-            {lastSaved.date} / 🍚{lastSaved.foodTotal}g / 💧{lastSaved.waterTotal}ml / 🍪{lastSaved.snack} / 💩{lastSaved.poop} / 💧{lastSaved.pee}
-            {lastSaved.weightKg !== "" ? ` / ⚖️${Number(lastSaved.weightKg).toFixed(1)}kg` : ""}
+            {lastSaved.date} / ごはん量 {lastSaved.foodTotal}g / 飲水量 {lastSaved.waterTotal}ml / おやつ量 {lastSaved.snack} / うんち回数 {lastSaved.poop}回 / おしっこ回数 {lastSaved.pee}回
+            {lastSaved.weightKg !== "" ? ` / 体重 ${Number(lastSaved.weightKg).toFixed(1)}kg` : ""}
           </div>
           <button
             onClick={onMoveHome}
@@ -1212,13 +1212,13 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
               <span style={{ fontSize: 11, color: palette.inkSoft }}>{row.isPrivate ? "匿名共有" : "名前公開"}</span>
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-              <Tag>🍚 {row.foodTotal}g</Tag>
-              <Tag>💧 {row.waterTotal}ml</Tag>
-              {row.weightKg !== "" && <Tag>⚖️ {Number(row.weightKg).toFixed(1)}kg</Tag>}
-              <Tag>🥣 {row.kibblePct}:{row.wetPct}</Tag>
-              <Tag>🍪 {row.snack}</Tag>
-              <Tag>💩 {row.poop}</Tag>
-              <Tag>💧 {row.pee}</Tag>
+              <Tag>ごはん量 {row.foodTotal}g</Tag>
+              <Tag>飲水量 {row.waterTotal}ml</Tag>
+              {row.weightKg !== "" && <Tag>体重 {Number(row.weightKg).toFixed(1)}kg</Tag>}
+              <Tag>比率 {row.kibblePct}:{row.wetPct}</Tag>
+              <Tag>おやつ量 {row.snack}</Tag>
+              <Tag>うんち回数 {row.poop}回</Tag>
+              <Tag>おしっこ回数 {row.pee}回</Tag>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
               <MiniButton onClick={() => startEdit(row)}>編集</MiniButton>
@@ -1289,10 +1289,10 @@ function CommunityView() {
               {cat.region} · {cat.age}歳
             </div>
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: palette.ink, flexWrap: "wrap" }}>
-              <Tag>🍚 {cat.food}g</Tag>
-              <Tag>🍪 {cat.snack}</Tag>
-              <Tag>💩 {cat.poop}</Tag>
-              <Tag>💧 {cat.pee}</Tag>
+              <Tag>ごはん量 {cat.food}g</Tag>
+              <Tag>おやつ量 {cat.snack}</Tag>
+              <Tag>うんち回数 {cat.poop}回</Tag>
+              <Tag>おしっこ回数 {cat.pee}回</Tag>
             </div>
           </div>
         </div>
@@ -1552,7 +1552,7 @@ function Tag({ children }) {
   );
 }
 
-function Counter({ label, value, setValue }) {
+function Counter({ label, value, setValue, unit }) {
   return (
     <div>
       <div style={{ fontSize: 11, color: palette.inkSoft, marginBottom: 6 }}>{label}</div>
@@ -1560,7 +1560,10 @@ function Counter({ label, value, setValue }) {
         <button onClick={() => setValue(Math.max(0, value - 1))} style={counterBtn}>
           −
         </button>
-        <div style={{ fontFamily: fontDisplay, fontSize: 28, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{value}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 54, justifyContent: "center" }}>
+          <div style={{ fontFamily: fontDisplay, fontSize: 28, fontWeight: 700, textAlign: "center" }}>{value}</div>
+          {unit && <div style={{ fontSize: 12, color: palette.inkSoft }}>{unit}</div>}
+        </div>
         <button onClick={() => setValue(Math.min(20, value + 1))} style={counterBtn}>
           +
         </button>
