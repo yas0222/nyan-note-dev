@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Home,
@@ -13,7 +13,9 @@ import {
   Utensils,
 } from "lucide-react";
 
-const myCats = [
+const STORAGE_KEY = "nyan-note-prototype-v1";
+
+const sampleCats = [
   {
     id: 1,
     name: "もなか",
@@ -22,6 +24,7 @@ const myCats = [
     photo: "🐱",
     color: "#E8B86D",
     region: "千葉県浦安市",
+    source: "sample",
   },
   {
     id: 2,
@@ -31,8 +34,52 @@ const myCats = [
     photo: "🐈‍⬛",
     color: "#5C5048",
     region: "千葉県浦安市",
+    source: "sample",
   },
 ];
+
+const sampleLogsByCat = {
+  1: [
+    {
+      id: 1,
+      date: todayKey(),
+      foodTotal: 70,
+      kibblePct: 70,
+      wetPct: 30,
+      snack: "ふつう",
+      poop: 1,
+      pee: 3,
+      isPrivate: false,
+      source: "sample",
+    },
+    {
+      id: 2,
+      date: daysAgoKey(1),
+      foodTotal: 66,
+      kibblePct: 65,
+      wetPct: 35,
+      snack: "少なめ",
+      poop: 1,
+      pee: 3,
+      isPrivate: false,
+      source: "sample",
+    },
+  ],
+  2: [
+    {
+      id: 3,
+      date: todayKey(),
+      foodTotal: 82,
+      kibblePct: 75,
+      wetPct: 25,
+      snack: "少なめ",
+      poop: 2,
+      pee: 4,
+      isPrivate: true,
+      source: "sample",
+    },
+  ],
+};
 
 const communityCats = [
   { id: 101, name: "ミケ", anonymous: false, region: "東京都世田谷区", age: 5, food: 60, snack: "少なめ", poop: 1, pee: 3, photo: "🐈" },
@@ -57,10 +104,27 @@ const palette = {
 const fontDisplay = "'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', serif";
 const fontBody = "'Zen Kaku Gothic New', 'Hiragino Sans', sans-serif";
 
-function CatHealthApp() {
-  const [tab, setTab] = useState("home");
-  const [selectedCat, setSelectedCat] = useState(myCats[0]);
-  const [todayLog, setTodayLog] = useState({
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysAgoKey(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+function buildInitialData() {
+  return {
+    cats: sampleCats,
+    logsByCat: sampleLogsByCat,
+    nextIds: { cat: 100, log: 500 },
+  };
+}
+
+function newLogDraft(date = todayKey()) {
+  return {
+    date,
     foodTotal: 70,
     kibblePct: 70,
     wetPct: 30,
@@ -68,7 +132,232 @@ function CatHealthApp() {
     poop: 1,
     pee: 3,
     isPrivate: false,
+  };
+}
+
+function validateCatForm(form) {
+  const errors = [];
+  if (!form.name.trim()) errors.push("名前は必須です。");
+  const ageNum = Number(form.age);
+  if (!Number.isInteger(ageNum) || ageNum < 0 || ageNum > 30) errors.push("年齢は0〜30の整数で入力してください。");
+  if (!["♂", "♀"].includes(form.gender)) errors.push("性別は♂または♀を選択してください。");
+  if (!form.region.trim()) errors.push("地域は必須です。");
+  if (!/^#[0-9A-Fa-f]{6}$/.test(form.color)) errors.push("色は#RRGGBB形式で入力してください。");
+  return errors;
+}
+
+function validateLogForm(form) {
+  const errors = [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) errors.push("日付は必須です。");
+  if (form.foodTotal < 0 || form.foodTotal > 150) errors.push("ごはん量は0〜150gで入力してください。");
+  if (form.kibblePct < 0 || form.kibblePct > 100) errors.push("カリカリ比率は0〜100で入力してください。");
+  if (form.wetPct < 0 || form.wetPct > 100) errors.push("ウェット比率は0〜100で入力してください。");
+  if (form.kibblePct + form.wetPct !== 100) errors.push("カリカリとウェットの比率合計は100にしてください。");
+  if (form.poop < 0 || form.poop > 20 || form.pee < 0 || form.pee > 20) errors.push("排泄回数は0〜20回で入力してください。");
+  return errors;
+}
+
+function CatHealthApp() {
+  const [tab, setTab] = useState("home");
+  const [data, setData] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return buildInitialData();
+      const parsed = JSON.parse(raw);
+      return {
+        cats: Array.isArray(parsed.cats) ? parsed.cats : sampleCats,
+        logsByCat: parsed.logsByCat && typeof parsed.logsByCat === "object" ? parsed.logsByCat : sampleLogsByCat,
+        nextIds: parsed.nextIds || { cat: 100, log: 500 },
+      };
+    } catch (_e) {
+      return buildInitialData();
+    }
   });
+
+  const [selectedCatId, setSelectedCatId] = useState(() => data.cats[0]?.id ?? null);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [data]);
+
+  useEffect(() => {
+    if (!data.cats.length) {
+      setSelectedCatId(null);
+      return;
+    }
+    if (!data.cats.some((c) => c.id === selectedCatId)) {
+      setSelectedCatId(data.cats[0].id);
+    }
+  }, [data.cats, selectedCatId]);
+
+  const selectedCat = data.cats.find((c) => c.id === selectedCatId) || null;
+
+  const todayLogByCat = useMemo(() => {
+    const t = todayKey();
+    const map = {};
+    for (const cat of data.cats) {
+      const list = data.logsByCat[cat.id] || [];
+      const log = list.find((row) => row.date === t);
+      map[cat.id] = log || null;
+    }
+    return map;
+  }, [data]);
+
+  const selectedDisplayLog = selectedCat ? todayLogByCat[selectedCat.id] || newLogDraft() : newLogDraft();
+
+  const updateCats = (updater) => {
+    setData((prev) => ({ ...prev, cats: updater(prev.cats) }));
+  };
+
+  const addCat = (form) => {
+    const errors = validateCatForm(form);
+    if (errors.length) return { ok: false, errors };
+
+    setData((prev) => {
+      const id = prev.nextIds.cat + 1;
+      return {
+        ...prev,
+        cats: [
+          ...prev.cats,
+          {
+            id,
+            name: form.name.trim(),
+            age: Number(form.age),
+            gender: form.gender,
+            photo: form.photo.trim() || "🐱",
+            color: form.color,
+            region: form.region.trim(),
+            source: "user",
+          },
+        ],
+        nextIds: { ...prev.nextIds, cat: id },
+      };
+    });
+    setMessage("猫プロフィールを追加しました。");
+    return { ok: true };
+  };
+
+  const updateCat = (catId, form) => {
+    const errors = validateCatForm(form);
+    if (errors.length) return { ok: false, errors };
+
+    updateCats((cats) =>
+      cats.map((cat) =>
+        cat.id === catId
+          ? {
+              ...cat,
+              name: form.name.trim(),
+              age: Number(form.age),
+              gender: form.gender,
+              photo: form.photo.trim() || "🐱",
+              color: form.color,
+              region: form.region.trim(),
+            }
+          : cat,
+      ),
+    );
+    setMessage("猫プロフィールを更新しました。");
+    return { ok: true };
+  };
+
+  const deleteCat = (catId) => {
+    if (!window.confirm("この猫プロフィールを削除しますか？\n関連する記録も削除されます。")) return;
+    setData((prev) => {
+      const nextCats = prev.cats.filter((c) => c.id !== catId);
+      const nextLogs = { ...prev.logsByCat };
+      delete nextLogs[catId];
+      return { ...prev, cats: nextCats, logsByCat: nextLogs };
+    });
+    setMessage("猫プロフィールを削除しました。");
+  };
+
+  const saveLog = (catId, draft, editingId) => {
+    const errors = validateLogForm(draft);
+    if (errors.length) return { ok: false, errors };
+
+    setData((prev) => {
+      const rows = prev.logsByCat[catId] || [];
+      const existingByDate = rows.find((r) => r.date === draft.date);
+      if (existingByDate && existingByDate.id !== editingId) {
+        return prev;
+      }
+      let nextRows;
+      if (editingId) {
+        nextRows = rows.map((row) =>
+          row.id === editingId
+            ? { ...row, ...draft }
+            : row,
+        );
+      } else {
+        const id = prev.nextIds.log + 1;
+        nextRows = [...rows, { id, ...draft, source: "user" }];
+        return {
+          ...prev,
+          logsByCat: {
+            ...prev.logsByCat,
+            [catId]: nextRows.sort((a, b) => b.date.localeCompare(a.date)),
+          },
+          nextIds: { ...prev.nextIds, log: id },
+        };
+      }
+
+      return {
+        ...prev,
+        logsByCat: {
+          ...prev.logsByCat,
+          [catId]: nextRows.sort((a, b) => b.date.localeCompare(a.date)),
+        },
+      };
+    });
+
+    const rows = data.logsByCat[catId] || [];
+    const duplicate = rows.find((r) => r.date === draft.date && r.id !== editingId);
+    if (duplicate) {
+      return { ok: false, errors: ["同じ日付の記録が既にあります。編集から更新してください。"] };
+    }
+
+    setMessage(editingId ? "日次記録を更新しました。" : "日次記録を追加しました。");
+    return { ok: true };
+  };
+
+  const deleteLog = (catId, logId) => {
+    if (!window.confirm("この日次記録を削除しますか？")) return;
+    setData((prev) => {
+      const rows = prev.logsByCat[catId] || [];
+      return {
+        ...prev,
+        logsByCat: {
+          ...prev.logsByCat,
+          [catId]: rows.filter((row) => row.id !== logId),
+        },
+      };
+    });
+    setMessage("日次記録を削除しました。");
+  };
+
+  const deleteSampleOnly = () => {
+    if (!window.confirm("サンプルデータのみ削除しますか？\n追加したデータは残ります。")) return;
+    setData((prev) => {
+      const cats = prev.cats.filter((c) => c.source !== "sample");
+      const logsByCat = {};
+      for (const cat of cats) {
+        const rows = (prev.logsByCat[cat.id] || []).filter((r) => r.source !== "sample");
+        logsByCat[cat.id] = rows;
+      }
+      return { ...prev, cats, logsByCat };
+    });
+    setMessage("サンプルデータのみ削除しました。");
+  };
+
+  const resetAllData = () => {
+    if (!window.confirm("全データを初期状態にリセットしますか？")) return;
+    const initial = buildInitialData();
+    setData(initial);
+    setSelectedCatId(initial.cats[0]?.id ?? null);
+    localStorage.removeItem(STORAGE_KEY);
+    setMessage("全データを初期化しました。");
+  };
 
   return (
     <div
@@ -99,30 +388,67 @@ function CatHealthApp() {
       <Header />
 
       <main style={{ position: "relative", zIndex: 2, padding: "0 20px", maxWidth: 480, margin: "0 auto" }}>
+        {message && (
+          <div style={{ ...cardStyle, background: "#FFF7E8", fontSize: 12, padding: "10px 14px" }}>
+            {message}
+          </div>
+        )}
         {tab === "home" && (
           <HomeView
-            cats={myCats}
+            cats={data.cats}
+            todayLogByCat={todayLogByCat}
             onPick={(c) => {
-              setSelectedCat(c);
+              setSelectedCatId(c.id);
               setTab("mycat");
             }}
+            onAddCat={addCat}
+            onUpdateCat={updateCat}
+            onDeleteCat={deleteCat}
+            onDeleteSampleOnly={deleteSampleOnly}
+            onResetAllData={resetAllData}
           />
         )}
-        {tab === "mycat" && <MyCatView cat={selectedCat} log={todayLog} />}
-        {tab === "log" && (
+        {tab === "mycat" && selectedCat && <MyCatView cat={selectedCat} log={selectedDisplayLog} />}
+        {tab === "mycat" && !selectedCat && <EmptyCatPrompt onMoveLog={() => setTab("home")} />}
+        {tab === "log" && selectedCat && (
           <LogView
             cat={selectedCat}
-            log={todayLog}
-            setLog={setTodayLog}
-            cats={myCats}
-            setSelectedCat={setSelectedCat}
+            logs={data.logsByCat[selectedCat.id] || []}
+            saveLog={saveLog}
+            deleteLog={deleteLog}
+            cats={data.cats}
+            setSelectedCat={(c) => setSelectedCatId(c.id)}
           />
         )}
+        {tab === "log" && !selectedCat && <EmptyCatPrompt onMoveLog={() => setTab("home")} />}
         {tab === "community" && <CommunityView />}
         {tab === "stats" && <StatsView />}
       </main>
 
       <BottomNav tab={tab} setTab={setTab} />
+    </div>
+  );
+}
+
+function EmptyCatPrompt({ onMoveLog }) {
+  return (
+    <div style={cardStyle}>
+      <div style={{ fontFamily: fontDisplay, fontSize: 18, fontWeight: 700 }}>猫プロフィールがありません</div>
+      <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 6 }}>ホームタブから猫を追加してください。</div>
+      <button
+        onClick={onMoveLog}
+        style={{
+          marginTop: 10,
+          border: `1px solid ${palette.line}`,
+          background: "transparent",
+          color: palette.ink,
+          borderRadius: 8,
+          padding: "8px 12px",
+          cursor: "pointer",
+        }}
+      >
+        ホームへ
+      </button>
     </div>
   );
 }
@@ -173,83 +499,181 @@ function Header() {
   );
 }
 
-function HomeView({ cats, onPick }) {
+function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDeleteCat, onDeleteSampleOnly, onResetAllData }) {
   const today = new Date();
   const dateStr = `${today.getMonth() + 1}月${today.getDate()}日`;
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingCatId, setEditingCatId] = useState(null);
+  const [errors, setErrors] = useState([]);
+  const [form, setForm] = useState({ name: "", age: "", gender: "♀", photo: "🐱", color: "#D9A86A", region: "" });
+
+  const resetForm = () => {
+    setForm({ name: "", age: "", gender: "♀", photo: "🐱", color: "#D9A86A", region: "" });
+    setErrors([]);
+  };
+
+  const beginEdit = (cat) => {
+    setEditingCatId(cat.id);
+    setShowAdd(false);
+    setErrors([]);
+    setForm({
+      name: cat.name,
+      age: String(cat.age),
+      gender: cat.gender,
+      photo: cat.photo,
+      color: cat.color,
+      region: cat.region,
+    });
+  };
+
+  const submit = () => {
+    const result = editingCatId ? onUpdateCat(editingCatId, form) : onAddCat(form);
+    if (!result.ok) {
+      setErrors(result.errors);
+      return;
+    }
+    setEditingCatId(null);
+    setShowAdd(false);
+    resetForm();
+  };
 
   return (
     <div>
       <SectionLabel left="今日の記録" right={dateStr} />
-      {cats.map((cat, i) => (
-        <button
-          key={cat.id}
-          onClick={() => onPick(cat)}
-          style={{
-            ...cardStyle,
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            width: "100%",
-            border: "none",
-            cursor: "pointer",
-            textAlign: "left",
-            transform: i % 2 === 0 ? "rotate(-0.4deg)" : "rotate(0.4deg)",
-          }}
-        >
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
-              background: cat.color,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 36,
-              flexShrink: 0,
-              boxShadow: "inset 0 -4px 8px rgba(0,0,0,0.1)",
-            }}
-          >
-            {cat.photo}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: fontDisplay, fontSize: 20, fontWeight: 700 }}>
-              {cat.name} <span style={{ fontSize: 14, color: palette.accent }}>{cat.gender}</span>
-            </div>
-            <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 2 }}>
-              {cat.age}歳 · {cat.region}
-            </div>
-            <div
+      {cats.map((cat, i) => {
+        const hasToday = Boolean(todayLogByCat[cat.id]);
+        return (
+          <div key={cat.id}>
+            <button
+              onClick={() => onPick(cat)}
               style={{
-                marginTop: 8,
-                fontSize: 11,
-                color: palette.leaf,
-                fontWeight: 600,
-                letterSpacing: "0.05em",
+                ...cardStyle,
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                width: "100%",
+                border: "none",
+                cursor: "pointer",
+                textAlign: "left",
+                transform: i % 2 === 0 ? "rotate(-0.4deg)" : "rotate(0.4deg)",
+                marginBottom: 6,
               }}
             >
-              ✓ 今日の記録あり
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: "50%",
+                  background: cat.color,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 36,
+                  flexShrink: 0,
+                  boxShadow: "inset 0 -4px 8px rgba(0,0,0,0.1)",
+                }}
+              >
+                {cat.photo}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: fontDisplay, fontSize: 20, fontWeight: 700 }}>
+                  {cat.name} <span style={{ fontSize: 14, color: palette.accent }}>{cat.gender}</span>
+                </div>
+                <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 2 }}>
+                  {cat.age}歳 · {cat.region}
+                </div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 11,
+                    color: hasToday ? palette.leaf : palette.accent,
+                    fontWeight: 600,
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {hasToday ? "✓ 今日の記録あり" : "◯ 今日の記録なし"}
+                </div>
+              </div>
+              <div style={{ fontSize: 24, color: palette.inkSoft }}>›</div>
+            </button>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12, marginTop: -2 }}>
+              <MiniButton onClick={() => beginEdit(cat)}>編集</MiniButton>
+              <MiniButton onClick={() => onDeleteCat(cat.id)}>削除</MiniButton>
             </div>
           </div>
-          <div style={{ fontSize: 24, color: palette.inkSoft }}>›</div>
-        </button>
-      ))}
+        );
+      })}
 
-      <button
-        style={{
-          ...cardStyle,
-          width: "100%",
-          border: `2px dashed ${palette.line}`,
-          background: "transparent",
-          cursor: "pointer",
-          color: palette.inkSoft,
-          fontFamily: fontBody,
-          fontSize: 14,
-          padding: 24,
-        }}
-      >
-        + 新しい猫ちゃんを登録
-      </button>
+      {(showAdd || editingCatId) && (
+        <div style={cardStyle}>
+          <Label>{editingCatId ? "猫プロフィールを編集" : "猫プロフィールを追加"}</Label>
+          <FormErrorList errors={errors} />
+          <InputRow label="名前">
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+          </InputRow>
+          <InputRow label="年齢">
+            <input type="number" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} style={inputStyle} />
+          </InputRow>
+          <InputRow label="性別">
+            <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} style={inputStyle}>
+              <option value="♀">♀</option>
+              <option value="♂">♂</option>
+            </select>
+          </InputRow>
+          <InputRow label="写真(絵文字)">
+            <input value={form.photo} onChange={(e) => setForm({ ...form, photo: e.target.value })} style={inputStyle} />
+          </InputRow>
+          <InputRow label="色(#RRGGBB)">
+            <input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} style={inputStyle} />
+          </InputRow>
+          <InputRow label="地域">
+            <input value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} style={inputStyle} />
+          </InputRow>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <MiniButton onClick={submit}>{editingCatId ? "更新" : "追加"}</MiniButton>
+            <MiniButton
+              onClick={() => {
+                setEditingCatId(null);
+                setShowAdd(false);
+                resetForm();
+              }}
+            >
+              キャンセル
+            </MiniButton>
+          </div>
+        </div>
+      )}
+
+      {!showAdd && !editingCatId && (
+        <button
+          onClick={() => {
+            setShowAdd(true);
+            setEditingCatId(null);
+            resetForm();
+          }}
+          style={{
+            ...cardStyle,
+            width: "100%",
+            border: `2px dashed ${palette.line}`,
+            background: "transparent",
+            cursor: "pointer",
+            color: palette.inkSoft,
+            fontFamily: fontBody,
+            fontSize: 14,
+            padding: 24,
+          }}
+        >
+          + 新しい猫ちゃんを登録
+        </button>
+      )}
+
+      <div style={{ ...cardStyle, borderStyle: "dashed" }}>
+        <Label>データ管理</Label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <MiniButton onClick={onDeleteSampleOnly}>サンプルだけ削除</MiniButton>
+          <MiniButton onClick={onResetAllData}>全データをリセット</MiniButton>
+        </div>
+      </div>
     </div>
   );
 }
@@ -276,9 +700,7 @@ function MyCatView({ cat, log }) {
         >
           {cat.photo}
         </div>
-        <div style={{ fontFamily: fontDisplay, fontSize: 28, fontWeight: 700, marginTop: 12 }}>
-          {cat.name}
-        </div>
+        <div style={{ fontFamily: fontDisplay, fontSize: 28, fontWeight: 700, marginTop: 12 }}>{cat.name}</div>
         <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 4, letterSpacing: "0.1em" }}>
           {cat.age}さい · {cat.gender} · {cat.region}
         </div>
@@ -302,8 +724,38 @@ function MyCatView({ cat, log }) {
   );
 }
 
-function LogView({ cat, log, setLog, cats, setSelectedCat }) {
-  const setKibble = (v) => setLog({ ...log, kibblePct: v, wetPct: 100 - v });
+function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat }) {
+  const [draft, setDraft] = useState(newLogDraft());
+  const [editingId, setEditingId] = useState(null);
+  const [errors, setErrors] = useState([]);
+
+  useEffect(() => {
+    const today = logs.find((l) => l.date === todayKey());
+    setDraft(today ? { ...today } : newLogDraft());
+    setEditingId(today?.id || null);
+    setErrors([]);
+  }, [cat.id, logs]);
+
+  const setKibble = (v) => setDraft({ ...draft, kibblePct: v, wetPct: 100 - v });
+
+  const onSubmit = () => {
+    const result = saveLog(cat.id, draft, editingId);
+    if (!result.ok) {
+      setErrors(result.errors);
+      return;
+    }
+    setErrors([]);
+    setEditingId(null);
+    setDraft(newLogDraft());
+  };
+
+  const startEdit = (log) => {
+    setDraft({ ...log });
+    setEditingId(log.id);
+    setErrors([]);
+  };
+
+  const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div>
@@ -333,34 +785,37 @@ function LogView({ cat, log, setLog, cats, setSelectedCat }) {
       </div>
 
       <div style={cardStyle}>
+        <Label>📅 記録日</Label>
+        <input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} style={inputStyle} />
+      </div>
+
+      <div style={cardStyle}>
         <Label>🍚 一日のエサの量</Label>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
-          <span style={{ fontFamily: fontDisplay, fontSize: 36, fontWeight: 700, color: palette.accent }}>
-            {log.foodTotal}
-          </span>
+          <span style={{ fontFamily: fontDisplay, fontSize: 36, fontWeight: 700, color: palette.accent }}>{draft.foodTotal}</span>
           <span style={{ fontSize: 14, color: palette.inkSoft }}>g</span>
         </div>
         <input
           type="range"
           min={0}
           max={150}
-          value={log.foodTotal}
-          onChange={(e) => setLog({ ...log, foodTotal: +e.target.value })}
+          value={draft.foodTotal}
+          onChange={(e) => setDraft({ ...draft, foodTotal: +e.target.value })}
           style={{ width: "100%", accentColor: palette.accent }}
         />
 
         <div style={{ marginTop: 20 }}>
           <Label>カリカリ / ウェット の比率</Label>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: palette.inkSoft, marginBottom: 6 }}>
-            <span>カリカリ {log.kibblePct}%</span>
-            <span>ウェット {log.wetPct}%</span>
+            <span>カリカリ {draft.kibblePct}%</span>
+            <span>ウェット {draft.wetPct}%</span>
           </div>
-          <RatioBar kibble={log.kibblePct} wet={log.wetPct} />
+          <RatioBar kibble={draft.kibblePct} wet={draft.wetPct} />
           <input
             type="range"
             min={0}
             max={100}
-            value={log.kibblePct}
+            value={draft.kibblePct}
             onChange={(e) => setKibble(+e.target.value)}
             style={{ width: "100%", accentColor: palette.leaf, marginTop: 8 }}
           />
@@ -371,7 +826,7 @@ function LogView({ cat, log, setLog, cats, setSelectedCat }) {
         <Label>🍪 おやつの量</Label>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {["なし", "少なめ", "ふつう", "多め"].map((opt) => (
-            <Pill key={opt} active={log.snack === opt} onClick={() => setLog({ ...log, snack: opt })}>
+            <Pill key={opt} active={draft.snack === opt} onClick={() => setDraft({ ...draft, snack: opt })}>
               {opt}
             </Pill>
           ))}
@@ -381,14 +836,14 @@ function LogView({ cat, log, setLog, cats, setSelectedCat }) {
       <div style={cardStyle}>
         <Label>💩 うんち / 💧 おしっこ の回数</Label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 8 }}>
-          <Counter label="うんち" value={log.poop} setValue={(v) => setLog({ ...log, poop: v })} />
-          <Counter label="おしっこ" value={log.pee} setValue={(v) => setLog({ ...log, pee: v })} />
+          <Counter label="うんち" value={draft.poop} setValue={(v) => setDraft({ ...draft, poop: v })} />
+          <Counter label="おしっこ" value={draft.pee} setValue={(v) => setDraft({ ...draft, pee: v })} />
         </div>
       </div>
 
       <div style={cardStyle}>
         <button
-          onClick={() => setLog({ ...log, isPrivate: !log.isPrivate })}
+          onClick={() => setDraft({ ...draft, isPrivate: !draft.isPrivate })}
           style={{
             width: "100%",
             display: "flex",
@@ -401,15 +856,15 @@ function LogView({ cat, log, setLog, cats, setSelectedCat }) {
           }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: palette.ink }}>
-            {log.isPrivate ? <EyeOff size={18} /> : <Eye size={18} />}
-            {log.isPrivate ? "名前を伏せて共有" : "名前ありで共有"}
+            {draft.isPrivate ? <EyeOff size={18} /> : <Eye size={18} />}
+            {draft.isPrivate ? "名前を伏せて共有" : "名前ありで共有"}
           </span>
           <span
             style={{
               width: 44,
               height: 26,
               borderRadius: 999,
-              background: log.isPrivate ? palette.inkSoft : palette.leaf,
+              background: draft.isPrivate ? palette.inkSoft : palette.leaf,
               position: "relative",
               transition: "background 0.2s",
             }}
@@ -418,7 +873,7 @@ function LogView({ cat, log, setLog, cats, setSelectedCat }) {
               style={{
                 position: "absolute",
                 top: 3,
-                left: log.isPrivate ? 21 : 3,
+                left: draft.isPrivate ? 21 : 3,
                 width: 20,
                 height: 20,
                 borderRadius: "50%",
@@ -429,13 +884,13 @@ function LogView({ cat, log, setLog, cats, setSelectedCat }) {
           </span>
         </button>
         <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 8 }}>
-          {log.isPrivate
-            ? "他のユーザーには地域と健康データだけが見えます"
-            : "他の飼い主さんに名前と一緒にシェアされます"}
+          {draft.isPrivate ? "他のユーザーには地域と健康データだけが見えます" : "他の飼い主さんに名前と一緒にシェアされます"}
         </div>
       </div>
 
+      <FormErrorList errors={errors} />
       <button
+        onClick={onSubmit}
         style={{
           width: "100%",
           padding: "16px",
@@ -452,8 +907,47 @@ function LogView({ cat, log, setLog, cats, setSelectedCat }) {
           boxShadow: "0 4px 0 rgba(58,46,39,0.3)",
         }}
       >
-        ✓ 今日の記録を保存
+        {editingId ? "✓ 日次記録を更新" : "✓ 日次記録を保存"}
       </button>
+
+      {editingId && (
+        <button
+          onClick={() => {
+            setEditingId(null);
+            setDraft(newLogDraft());
+            setErrors([]);
+          }}
+          style={{
+            width: "100%",
+            padding: "12px",
+            marginTop: 8,
+            background: "transparent",
+            color: palette.inkSoft,
+            border: `1px solid ${palette.line}`,
+            borderRadius: 10,
+            cursor: "pointer",
+          }}
+        >
+          新規記録モードに戻す
+        </button>
+      )}
+
+      <div style={{ ...cardStyle, marginTop: 12 }}>
+        <Label>記録一覧</Label>
+        {sortedLogs.length === 0 && <div style={{ fontSize: 12, color: palette.inkSoft }}>まだ記録がありません。</div>}
+        {sortedLogs.map((row) => (
+          <div key={row.id} style={{ borderTop: `1px dashed ${palette.line}`, padding: "10px 0" }}>
+            <div style={{ fontSize: 12, color: palette.inkSoft }}>{row.date}</div>
+            <div style={{ fontSize: 12, marginTop: 2 }}>
+              🍚{row.foodTotal}g / 🍪{row.snack} / 💩{row.poop} / 💧{row.pee}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <MiniButton onClick={() => startEdit(row)}>編集</MiniButton>
+              <MiniButton onClick={() => deleteLog(cat.id, row.id)}>削除</MiniButton>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -507,9 +1001,7 @@ function CommunityView() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontFamily: fontDisplay, fontSize: 16, fontWeight: 700 }}>
-                {cat.anonymous ? "ひみつの猫さん" : cat.name}
-              </span>
+              <span style={{ fontFamily: fontDisplay, fontSize: 16, fontWeight: 700 }}>{cat.anonymous ? "ひみつの猫さん" : cat.name}</span>
               {cat.anonymous && <EyeOff size={12} color={palette.inkSoft} />}
             </div>
             <div style={{ fontSize: 11, color: palette.inkSoft, marginBottom: 8 }}>
@@ -658,6 +1150,17 @@ const cardStyle = {
   boxShadow: "0 2px 0 rgba(58,46,39,0.06), 0 8px 16px -8px rgba(58,46,39,0.15)",
 };
 
+const inputStyle = {
+  width: "100%",
+  border: `1px solid ${palette.line}`,
+  borderRadius: 8,
+  background: "#fff",
+  padding: "8px 10px",
+  fontFamily: fontBody,
+  fontSize: 13,
+  color: palette.ink,
+};
+
 function SectionLabel({ left, right }) {
   return (
     <div
@@ -668,9 +1171,7 @@ function SectionLabel({ left, right }) {
         margin: "8px 4px 12px",
       }}
     >
-      <span style={{ fontFamily: fontDisplay, fontSize: 14, fontWeight: 700, letterSpacing: "0.05em" }}>
-        — {left}
-      </span>
+      <span style={{ fontFamily: fontDisplay, fontSize: 14, fontWeight: 700, letterSpacing: "0.05em" }}>— {left}</span>
       {right && <span style={{ fontSize: 11, color: palette.inkSoft }}>{right}</span>}
     </div>
   );
@@ -689,6 +1190,46 @@ function Label({ children }) {
     >
       {children}
     </div>
+  );
+}
+
+function InputRow({ label, children }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 11, color: palette.inkSoft, marginBottom: 4 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function FormErrorList({ errors }) {
+  if (!errors?.length) return null;
+  return (
+    <div style={{ background: "#FFF2F0", border: "1px solid #F2C4BC", color: "#A53C27", borderRadius: 8, fontSize: 12, padding: 8, marginBottom: 8 }}>
+      {errors.map((e) => (
+        <div key={e}>・{e}</div>
+      ))}
+    </div>
+  );
+}
+
+function MiniButton({ onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        border: `1px solid ${palette.line}`,
+        background: palette.cream,
+        color: palette.ink,
+        borderRadius: 999,
+        padding: "4px 10px",
+        fontSize: 11,
+        fontFamily: fontBody,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -738,10 +1279,8 @@ function Counter({ label, value, setValue }) {
         <button onClick={() => setValue(Math.max(0, value - 1))} style={counterBtn}>
           −
         </button>
-        <div style={{ fontFamily: fontDisplay, fontSize: 28, fontWeight: 700, minWidth: 32, textAlign: "center" }}>
-          {value}
-        </div>
-        <button onClick={() => setValue(value + 1)} style={counterBtn}>
+        <div style={{ fontFamily: fontDisplay, fontSize: 28, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{value}</div>
+        <button onClick={() => setValue(Math.min(20, value + 1))} style={counterBtn}>
           +
         </button>
       </div>
@@ -766,9 +1305,7 @@ function BigStat({ label, value, icon, small }) {
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: palette.inkSoft, marginBottom: 4 }}>
         {icon} {label}
       </div>
-      <div style={{ fontFamily: fontDisplay, fontSize: small ? 20 : 28, fontWeight: 700, color: palette.ink }}>
-        {value}
-      </div>
+      <div style={{ fontFamily: fontDisplay, fontSize: small ? 20 : 28, fontWeight: 700, color: palette.ink }}>{value}</div>
     </div>
   );
 }
