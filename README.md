@@ -109,13 +109,27 @@ python3 -m http.server 8000
 ### Firebase診断の使い方
 
 1. ホーム画面の下部「Firebase診断」カードを開きます。
-2. `Firestore接続テスト` ボタンを押すと、Firestore の `debug` コレクションへテストドキュメントを書き込みます。
+2. `Firestore接続テスト` ボタンを押すと、Firestore の `debug` コレクションへテストドキュメントを書き込みます（`Firebase app 初期化成功` と `Firestore 初期化成功` の表示を先に確認）。
 3. 保存内容は軽量データのみです。
    - `ownerUid`
    - `createdAt`
    - `message: "firestore test"`
 4. 成功時は画面に `Firestore接続テスト成功` と表示され、失敗時はエラーコードとエラーメッセージが表示されます。
 5. 同時に `console.log` / `console.error` に詳細を出力するため、ブラウザ開発者ツールでも原因追跡できます。
+
+### GitHub Pages での Firebase SDK 読み込み構成
+
+- 本アプリは GitHub Pages で動く静的 HTML 構成です（npm / bundler 不要）。
+- Firebase は **compat SDK** を `index.html` の `script` タグで読み込みます。
+- 読み込み順は次の通りです（`app.js` より前に Firebase SDK を置く）:
+
+```html
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+```
+
+- `app.js` 側では compat API（`firebase.initializeApp` / `firebase.firestore`）に統一し、modular API とは混在させません。
 
 ### Firebase プロジェクト作成手順（概要）
 

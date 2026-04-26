@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, deleteDoc } from "firebase/firestore";
 import {
   Home,
   Cat,
@@ -59,12 +57,17 @@ function createFirestoreGateway() {
       appInitStatus: "Firebase app 初期化失敗",
       firestoreInitStatus: "Firestore 初期化失敗",
       initErrorMessage: "Firebase設定が未入力です",
+      initErrorCode: "firebase/config-missing",
     };
   }
 
   try {
-    const app = initializeApp(FIREBASE_CONFIG, "nyan-note-app");
-    const db = getFirestore(app);
+    const firebaseSdk = window.firebase;
+    if (!firebaseSdk) {
+      throw new Error("Firebase SDKが読み込まれていません");
+    }
+    firebaseSdk.apps.length ? firebaseSdk.app() : firebaseSdk.initializeApp(FIREBASE_CONFIG);
+    const db = firebaseSdk.firestore();
     return {
       enabled: true,
       db,
@@ -72,15 +75,20 @@ function createFirestoreGateway() {
       appInitStatus: "Firebase app 初期化成功",
       firestoreInitStatus: "Firestore 初期化成功",
       initErrorMessage: "",
+      initErrorCode: "",
     };
   } catch (e) {
+    const details = getFirebaseErrorDetails(e);
+    console.error("Firebase初期化エラー:", details, e);
+    if (e && e.stack) console.error("Firebase初期化スタック:", e.stack);
     return {
       enabled: false,
       db: null,
       configStatus: "Firebase設定済み",
       appInitStatus: "Firebase app 初期化失敗",
       firestoreInitStatus: "Firestore 初期化失敗",
-      initErrorMessage: e instanceof Error ? e.message : "不明な初期化エラー",
+      initErrorMessage: details.message,
+      initErrorCode: details.code,
     };
   }
 }
@@ -381,7 +389,7 @@ function CatHealthApp() {
     lastCatSaveResult: "未実行",
     lastRecordSaveResult: "未実行",
     lastConnectionTestResult: "未実行",
-    lastErrorCode: "",
+    lastErrorCode: firestoreGateway.initErrorCode || "",
     lastErrorMessage: firestoreGateway.initErrorMessage || "",
   }));
   const [tab, setTab] = useState("home");
@@ -427,12 +435,13 @@ function CatHealthApp() {
     }
     try {
       const payload = toFirestoreCatPayload(cat, ownerUid);
-      await setDoc(doc(firestoreGateway.db, "cats", String(cat.id)), payload, { merge: true });
+      await firestoreGateway.db.collection("cats").doc(String(cat.id)).set(payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("猫プロフィール", true);
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
       console.error("[Firestore] 猫プロフィール保存エラー詳細", e);
+      if (e && e.stack) console.error("[Firestore] 猫プロフィール保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
       updateFirestoreSaveDebug("猫プロフィール", false, details.code, details.message);
     }
@@ -441,7 +450,7 @@ function CatHealthApp() {
   const deleteCatFromCloud = async (catId) => {
     if (!firestoreGateway.enabled || !firestoreGateway.db) return;
     try {
-      await deleteDoc(doc(firestoreGateway.db, "cats", String(catId)));
+      await firestoreGateway.db.collection("cats").doc(String(catId)).delete();
       setFirebaseStatus("Firebase保存可能");
     } catch (_e) {
       setFirebaseStatus("Firebase保存エラー");
@@ -455,12 +464,13 @@ function CatHealthApp() {
     }
     try {
       const payload = toFirestoreRecordPayload(record, catId, ownerUid);
-      await setDoc(doc(firestoreGateway.db, "records", String(record.id)), payload, { merge: true });
+      await firestoreGateway.db.collection("records").doc(String(record.id)).set(payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("日次記録", true);
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
       console.error("[Firestore] 日次記録保存エラー詳細", e);
+      if (e && e.stack) console.error("[Firestore] 日次記録保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
       updateFirestoreSaveDebug("日次記録", false, details.code, details.message);
     }
@@ -486,7 +496,7 @@ function CatHealthApp() {
         createdAt: new Date().toISOString(),
         message: "firestore test",
       });
-      await setDoc(doc(firestoreGateway.db, "debug", `test-${Date.now()}`), payload, { merge: true });
+      await firestoreGateway.db.collection("debug").doc(`test-${Date.now()}`).set(payload, { merge: true });
       console.log("[Firestore] 接続テスト成功", payload);
       setFirebaseDebug((prev) => ({
         ...prev,
@@ -498,6 +508,7 @@ function CatHealthApp() {
     } catch (e) {
       const details = getFirebaseErrorDetails(e);
       console.error("[Firestore] 接続テスト失敗", details, e);
+      if (e && e.stack) console.error("[Firestore] 接続テスト失敗スタック", e.stack);
       setFirebaseDebug((prev) => ({
         ...prev,
         lastConnectionTestResult: "Firestore接続テスト失敗",
@@ -511,7 +522,7 @@ function CatHealthApp() {
   const deleteRecordFromCloud = async (logId) => {
     if (!firestoreGateway.enabled || !firestoreGateway.db) return;
     try {
-      await deleteDoc(doc(firestoreGateway.db, "records", String(logId)));
+      await firestoreGateway.db.collection("records").doc(String(logId)).delete();
       setFirebaseStatus("Firebase保存可能");
     } catch (_e) {
       setFirebaseStatus("Firebase保存エラー");
