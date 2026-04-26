@@ -1490,6 +1490,10 @@ const cardStyle = {
 
 const inputStyle = {
   width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "block",
+  boxSizing: "border-box",
   border: `1px solid ${palette.line}`,
   borderRadius: 8,
   background: "#fff",
