@@ -89,3 +89,34 @@ python3 -m http.server 8000
 
 - 実装は `app.js`（単一ファイル）をベースに、既存 UI を壊さない差分拡張で対応しています。
 - `styles.css` は既存のまま維持しています（本UIは主に `app.js` のインラインスタイルで構成）。
+
+## Firebase 対応の土台（今回追加）
+
+- Firestore 保存の土台を追加しました。猫プロフィール（`cats`）と日次記録（`records`）を Firestore に保存できる構造です。
+- ただし `localStorage` 保存を常に優先し、Firestore 保存に失敗してもアプリが壊れない実装にしています。
+- Firebase 未設定時は自動でローカル運用（`localStorage` のみ）になります。
+- ログイン機能はまだ未実装です。現在は `anonymousOwnerId` を `localStorage` に生成し、`ownerUid` として利用します。
+
+### Firebase プロジェクト作成手順（概要）
+
+1. Firebase コンソールで新規プロジェクトを作成。
+2. Web アプリを追加し、Firebase SDK 設定値（apiKey など）を取得。
+3. Firestore Database を作成（本アプリは Firestore を利用）。
+4. 必要に応じてルールを設定（開発時は読み書き可能な最低限の設定で確認）。
+
+### Firebase config の設定場所
+
+- `app.js` 内の `FIREBASE_CONFIG` に設定値をまとめています。
+- ここが未設定（空文字）の場合は「Firebase未設定」として動作し、ローカル保存のみ行います。
+
+### 現時点の制約と今後の方針
+
+- 現時点では Firebase Authentication は未実装です（匿名IDで代替）。
+- 画像は Firebase Storage へは移行していません（引き続き localStorage 保存）。
+- 将来リリースに向け、以下の対応が必要です。
+  - Firebase Authentication 導入
+  - Firebase Storage への画像保存移行
+  - PWA 化
+  - Capacitor による Android / iOS アプリ化
+  - プライバシーポリシー整備
+  - アカウント削除機能

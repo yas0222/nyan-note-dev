@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc, deleteDoc } from "firebase/firestore";
 import {
   Home,
   Cat,
@@ -14,6 +16,100 @@ import {
 } from "lucide-react";
 
 const STORAGE_KEY = "nyan-note-prototype-v1";
+const ANONYMOUS_OWNER_ID_KEY = "nyan-note-anonymous-owner-id-v1";
+
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+};
+
+function createAnonymousOwnerId() {
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `anon-${Date.now().toString(36)}-${rand}`;
+}
+
+function getOrCreateAnonymousOwnerId() {
+  try {
+    const existing = localStorage.getItem(ANONYMOUS_OWNER_ID_KEY);
+    if (existing) return existing;
+    const created = createAnonymousOwnerId();
+    localStorage.setItem(ANONYMOUS_OWNER_ID_KEY, created);
+    return created;
+  } catch (_e) {
+    return "anon-local-fallback";
+  }
+}
+
+function hasFirebaseConfig(config) {
+  const required = ["apiKey", "authDomain", "projectId", "appId"];
+  return required.every((key) => typeof config[key] === "string" && config[key].trim() !== "");
+}
+
+function createFirestoreGateway() {
+  if (!hasFirebaseConfig(FIREBASE_CONFIG)) {
+    return {
+      enabled: false,
+      db: null,
+      status: "Firebase未設定",
+    };
+  }
+
+  try {
+    const app = initializeApp(FIREBASE_CONFIG, "nyan-note-app");
+    const db = getFirestore(app);
+    return {
+      enabled: true,
+      db,
+      status: "Firebase保存可能",
+    };
+  } catch (_e) {
+    return {
+      enabled: false,
+      db: null,
+      status: "Firebase保存エラー",
+    };
+  }
+}
+
+function mapCatToFirestore(cat, ownerUid) {
+  const now = new Date().toISOString();
+  return {
+    ownerUid,
+    name: cat.name,
+    age: Number(cat.age),
+    sex: cat.gender,
+    region: cat.region,
+    coatPattern: cat.coatPattern || "",
+    currentWeightKg: cat.currentWeightKg === "" ? null : Number(cat.currentWeightKg),
+    visibility: "private",
+    createdAt: cat.createdAt || now,
+    updatedAt: now,
+  };
+}
+
+function mapRecordToFirestore(record, catId, ownerUid) {
+  const now = new Date().toISOString();
+  return {
+    ownerUid,
+    catId: String(catId),
+    date: record.date,
+    foodGram: Number(record.foodTotal),
+    dryRatio: Number(record.kibblePct),
+    wetRatio: Number(record.wetPct),
+    waterMl: Number(record.waterTotal),
+    treatLevel: record.snack,
+    poopCount: Number(record.poop),
+    peeCount: Number(record.pee),
+    weightKg: record.weightKg === "" ? null : Number(record.weightKg),
+    visibility: record.isPrivate ? "private" : "public",
+    createdAt: record.createdAt || now,
+    updatedAt: now,
+  };
+}
 
 const sampleCats = [
   {
@@ -250,6 +346,9 @@ function hydrateLogDraft(log) {
 }
 
 function CatHealthApp() {
+  const [ownerUid] = useState(() => getOrCreateAnonymousOwnerId());
+  const [firestoreGateway] = useState(() => createFirestoreGateway());
+  const [firebaseStatus, setFirebaseStatus] = useState(firestoreGateway.status);
   const [tab, setTab] = useState("home");
   const [data, setData] = useState(() => {
     try {
@@ -268,6 +367,48 @@ function CatHealthApp() {
 
   const [selectedCatId, setSelectedCatId] = useState(() => data.cats[0]?.id ?? null);
   const [message, setMessage] = useState("");
+
+  const saveCatToCloud = async (cat) => {
+    if (!firestoreGateway.enabled || !firestoreGateway.db) return;
+    try {
+      const payload = mapCatToFirestore(cat, ownerUid);
+      await setDoc(doc(firestoreGateway.db, "cats", String(cat.id)), payload, { merge: true });
+      setFirebaseStatus("Firebase保存可能");
+    } catch (_e) {
+      setFirebaseStatus("Firebase保存エラー");
+    }
+  };
+
+  const deleteCatFromCloud = async (catId) => {
+    if (!firestoreGateway.enabled || !firestoreGateway.db) return;
+    try {
+      await deleteDoc(doc(firestoreGateway.db, "cats", String(catId)));
+      setFirebaseStatus("Firebase保存可能");
+    } catch (_e) {
+      setFirebaseStatus("Firebase保存エラー");
+    }
+  };
+
+  const saveRecordToCloud = async (record, catId) => {
+    if (!firestoreGateway.enabled || !firestoreGateway.db) return;
+    try {
+      const payload = mapRecordToFirestore(record, catId, ownerUid);
+      await setDoc(doc(firestoreGateway.db, "records", String(record.id)), payload, { merge: true });
+      setFirebaseStatus("Firebase保存可能");
+    } catch (_e) {
+      setFirebaseStatus("Firebase保存エラー");
+    }
+  };
+
+  const deleteRecordFromCloud = async (logId) => {
+    if (!firestoreGateway.enabled || !firestoreGateway.db) return;
+    try {
+      await deleteDoc(doc(firestoreGateway.db, "records", String(logId)));
+      setFirebaseStatus("Firebase保存可能");
+    } catch (_e) {
+      setFirebaseStatus("Firebase保存エラー");
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -304,28 +445,29 @@ function CatHealthApp() {
     const errors = validateCatForm(form);
     if (errors.length) return { ok: false, errors };
 
+    let createdCat = null;
     setData((prev) => {
       const id = prev.nextIds.cat + 1;
+      createdCat = {
+        id,
+        name: form.name.trim(),
+        age: Number(form.age),
+        gender: form.gender,
+        coatPattern: form.coatPattern.trim(),
+        photo: "🐱",
+        region: form.region.trim(),
+        currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
+        photoImage: form.photoImage || "",
+        source: "user",
+        createdAt: new Date().toISOString(),
+      };
       return {
         ...prev,
-        cats: [
-          ...prev.cats,
-          {
-            id,
-            name: form.name.trim(),
-            age: Number(form.age),
-            gender: form.gender,
-            coatPattern: form.coatPattern.trim(),
-            photo: "🐱",
-            region: form.region.trim(),
-            currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
-            photoImage: form.photoImage || "",
-            source: "user",
-          },
-        ],
+        cats: [...prev.cats, createdCat],
         nextIds: { ...prev.nextIds, cat: id },
       };
     });
+    if (createdCat) saveCatToCloud(createdCat);
     setMessage("猫プロフィールを追加しました。");
     return { ok: true };
   };
@@ -334,35 +476,36 @@ function CatHealthApp() {
     const errors = validateCatForm(form);
     if (errors.length) return { ok: false, errors };
 
-    updateCats((cats) =>
-      cats.map((cat) =>
-        cat.id === catId
-          ? {
-              ...cat,
-              name: form.name.trim(),
-              age: Number(form.age),
-              gender: form.gender,
-              coatPattern: form.coatPattern.trim(),
-              photo: cat.photo || "🐱",
-              photoImage: form.photoImage || "",
-              region: form.region.trim(),
-              currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
-            }
-          : cat,
-      ),
-    );
+    const target = data.cats.find((cat) => cat.id === catId);
+    const updated = {
+      ...target,
+      name: form.name.trim(),
+      age: Number(form.age),
+      gender: form.gender,
+      coatPattern: form.coatPattern.trim(),
+      photo: target?.photo || "🐱",
+      photoImage: form.photoImage || "",
+      region: form.region.trim(),
+      currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
+      updatedAt: new Date().toISOString(),
+    };
+    updateCats((cats) => cats.map((cat) => (cat.id === catId ? updated : cat)));
+    saveCatToCloud(updated);
     setMessage("猫プロフィールを更新しました。");
     return { ok: true };
   };
 
   const deleteCat = (catId) => {
     if (!window.confirm("この猫プロフィールを削除しますか？\n関連する記録も削除されます。")) return;
+    const relatedLogs = data.logsByCat[catId] || [];
     setData((prev) => {
       const nextCats = prev.cats.filter((c) => c.id !== catId);
       const nextLogs = { ...prev.logsByCat };
       delete nextLogs[catId];
       return { ...prev, cats: nextCats, logsByCat: nextLogs };
     });
+    relatedLogs.forEach((log) => deleteRecordFromCloud(log.id));
+    deleteCatFromCloud(catId);
     setMessage("猫プロフィールを削除しました。");
   };
 
@@ -371,6 +514,7 @@ function CatHealthApp() {
     const errors = validateLogForm(normalizedDraft);
     if (errors.length) return { ok: false, errors };
 
+    let recordForCloud = null;
     setData((prev) => {
       const rows = prev.logsByCat[catId] || [];
       const existingByDate = rows.find((r) => r.date === normalizedDraft.date);
@@ -381,12 +525,14 @@ function CatHealthApp() {
       if (editingId) {
         nextRows = rows.map((row) =>
           row.id === editingId
-            ? { ...row, ...normalizedDraft }
+            ? { ...row, ...normalizedDraft, updatedAt: new Date().toISOString() }
             : row,
         );
+        recordForCloud = nextRows.find((row) => row.id === editingId) || null;
       } else {
         const id = prev.nextIds.log + 1;
-        nextRows = [...rows, { id, ...normalizedDraft, source: "user" }];
+        recordForCloud = { id, ...normalizedDraft, source: "user", createdAt: new Date().toISOString() };
+        nextRows = [...rows, recordForCloud];
         return {
           ...prev,
           logsByCat: {
@@ -412,6 +558,7 @@ function CatHealthApp() {
       return { ok: false, errors: ["同じ日付の記録が既にあります。編集から更新してください。"] };
     }
 
+    if (recordForCloud) saveRecordToCloud(recordForCloud, catId);
     setMessage(editingId ? "日次記録を更新しました。" : "日次記録を追加しました。");
     return { ok: true };
   };
@@ -428,6 +575,7 @@ function CatHealthApp() {
         },
       };
     });
+    deleteRecordFromCloud(logId);
     setMessage("日次記録を削除しました。");
   };
 
@@ -501,6 +649,7 @@ function CatHealthApp() {
             onDeleteCat={deleteCat}
             onDeleteSampleOnly={deleteSampleOnly}
             onResetAllData={resetAllData}
+            firebaseStatus={firebaseStatus}
           />
         )}
         {tab === "mycat" && <MyCatView cats={data.cats} logsByCat={data.logsByCat} />}
@@ -594,7 +743,7 @@ function Header() {
   );
 }
 
-function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDeleteCat, onDeleteSampleOnly, onResetAllData }) {
+function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDeleteCat, onDeleteSampleOnly, onResetAllData, firebaseStatus }) {
   const today = new Date();
   const dateStr = `${today.getMonth() + 1}月${today.getDate()}日`;
   const [showAdd, setShowAdd] = useState(false);
@@ -843,6 +992,14 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <MiniButton onClick={onDeleteSampleOnly}>サンプルだけ削除</MiniButton>
           <MiniButton onClick={onResetAllData}>全データをリセット</MiniButton>
+        </div>
+      </div>
+
+      <div style={{ ...cardStyle, padding: "12px 14px", marginTop: -4 }}>
+        <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.05em", marginBottom: 4 }}>設定</div>
+        <div style={{ fontSize: 12, color: palette.ink }}>
+          Firebase接続状態:{" "}
+          <span style={{ color: firebaseStatus === "Firebase保存エラー" ? palette.accent : palette.inkSoft }}>{firebaseStatus}</span>
         </div>
       </div>
     </div>
