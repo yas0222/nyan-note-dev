@@ -309,7 +309,7 @@ function CatHealthApp() {
             age: Number(form.age),
             gender: form.gender,
             coatPattern: form.coatPattern.trim(),
-            photo: form.photo.trim() || "🐱",
+            photo: "🐱",
             region: form.region.trim(),
             currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
             photoImage: form.photoImage || "",
@@ -336,7 +336,7 @@ function CatHealthApp() {
               age: Number(form.age),
               gender: form.gender,
               coatPattern: form.coatPattern.trim(),
-              photo: form.photo.trim() || "🐱",
+              photo: cat.photo || "🐱",
               photoImage: form.photoImage || "",
               region: form.region.trim(),
               currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
@@ -598,7 +598,6 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
     age: "",
     gender: "♀",
     coatPattern: "",
-    photo: "🐱",
     photoImage: "",
     region: "",
     currentWeightKg: "",
@@ -610,7 +609,6 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
       age: "",
       gender: "♀",
       coatPattern: "",
-      photo: "🐱",
       photoImage: "",
       region: "",
       currentWeightKg: "",
@@ -627,7 +625,6 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
       age: String(cat.age),
       gender: cat.gender,
       coatPattern: cat.coatPattern ?? "",
-      photo: cat.photo,
       photoImage: cat.photoImage || "",
       region: cat.region,
       currentWeightKg: cat.currentWeightKg ?? "",
@@ -744,10 +741,10 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
               <option value="♂">♂</option>
             </select>
           </InputRow>
-          <InputRow label="写真(絵文字)">
-            <input value={form.photo} onChange={(e) => setForm({ ...form, photo: e.target.value })} style={inputStyle} />
-          </InputRow>
           <InputRow label="プロフィール画像">
+            <div style={{ fontSize: 12, color: palette.ink, marginBottom: 6 }}>
+              {form.photoImage ? "画像を変更する" : "新しい画像を選択"}
+            </div>
             <input
               type="file"
               accept="image/*"
@@ -758,7 +755,21 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
               }}
               style={inputStyle}
             />
-            {form.photoImage && <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 4 }}>画像を設定済み（絵文字より優先表示）</div>}
+            {form.photoImage ? (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: palette.inkSoft }}>画像を設定済み</div>
+                <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                  <img
+                    src={form.photoImage}
+                    alt="現在のプロフィール画像プレビュー"
+                    style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: `1px solid ${palette.line}` }}
+                  />
+                  <MiniButton onClick={() => setForm((prev) => ({ ...prev, photoImage: "" }))}>画像を削除</MiniButton>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 6 }}>画像未設定</div>
+            )}
           </InputRow>
           <InputRow label="毛色・柄（任意）">
             <input
@@ -1069,7 +1080,9 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
               color: palette.ink,
             }}
           >
-            <span style={{ marginRight: 6 }}>{c.photo}</span>
+            <span style={{ marginRight: 6, display: "inline-flex", verticalAlign: "middle" }}>
+              <CatAvatar cat={c} size={18} fontSize={12} />
+            </span>
             {c.name}
           </button>
         ))}
@@ -1769,7 +1782,7 @@ function CatAvatar({ cat, size = 64, fontSize = 34 }) {
       />
     );
   }
-  return <span style={{ fontSize }}>{cat?.photo || "🐱"}</span>;
+  return <Cat size={Math.round(size * 0.65)} color={palette.ink} strokeWidth={1.8} />;
 }
 
 const counterBtn = {
