@@ -19,12 +19,13 @@ const STORAGE_KEY = "nyan-note-prototype-v1";
 const ANONYMOUS_OWNER_ID_KEY = "nyan-note-anonymous-owner-id-v1";
 
 const FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "ここに取得した値",
+  authDomain: "neko222-ym.firebaseapp.com",
+  projectId: "neko222-ym",
+  storageBucket: "neko222-ym.firebasestorage.app",
+  messagingSenderId: "694032444792",
+  appId: "1:694032444792:web:b367c565ad0d475978ec8d",
+  measurementId: "G-KQGVBJPPDK",
 };
 
 function createAnonymousOwnerId() {
