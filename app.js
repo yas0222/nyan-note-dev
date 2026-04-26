@@ -969,7 +969,18 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
     setErrors([]);
   }, [cat.id, logs]);
 
-  const setKibble = (v) => setDraft({ ...draft, kibblePct: v, wetPct: 100 - v });
+  const setKibble = (v) => {
+    const next = Math.max(0, Math.min(100, Number.isFinite(v) ? Math.round(v) : 0));
+    setDraft({ ...draft, kibblePct: next, wetPct: 100 - next });
+  };
+  const setFoodTotal = (v) => {
+    const next = Math.max(0, Math.min(150, Number.isFinite(v) ? Math.round(v) : 0));
+    setDraft({ ...draft, foodTotal: next });
+  };
+  const setWaterTotal = (v) => {
+    const next = Math.max(0, Math.min(500, Number.isFinite(v) ? Math.round(v) : 0));
+    setDraft({ ...draft, waterTotal: next });
+  };
 
   const onSubmit = () => {
     const result = saveLog(cat.id, draft, editingId);
@@ -1041,18 +1052,15 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
       </div>
 
       <div style={cardStyle}>
-        <Label>🍚 一日のエサの量</Label>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
-          <span style={{ fontFamily: fontDisplay, fontSize: 36, fontWeight: 700, color: palette.accent }}>{draft.foodTotal}</span>
-          <span style={{ fontSize: 14, color: palette.inkSoft }}>g</span>
-        </div>
-        <input
-          type="range"
+        <Label>🍚 一日のごはんの量</Label>
+        <StepNumberInput
+          value={draft.foodTotal}
+          unit="g"
           min={0}
           max={150}
-          value={draft.foodTotal}
-          onChange={(e) => setDraft({ ...draft, foodTotal: +e.target.value })}
-          style={{ width: "100%", accentColor: palette.accent }}
+          step={5}
+          color={palette.accent}
+          onChange={setFoodTotal}
         />
 
         <div style={{ marginTop: 20 }}>
@@ -1062,30 +1070,20 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
             <span>ウェット {draft.wetPct}%</span>
           </div>
           <RatioBar kibble={draft.kibblePct} wet={draft.wetPct} />
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={draft.kibblePct}
-            onChange={(e) => setKibble(+e.target.value)}
-            style={{ width: "100%", accentColor: palette.leaf, marginTop: 8 }}
-          />
+          <RatioSelector value={draft.kibblePct} onChange={setKibble} />
         </div>
       </div>
 
       <div style={cardStyle}>
         <Label>💧 一日の飲水量</Label>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
-          <span style={{ fontFamily: fontDisplay, fontSize: 36, fontWeight: 700, color: palette.leaf }}>{draft.waterTotal}</span>
-          <span style={{ fontSize: 14, color: palette.inkSoft }}>ml</span>
-        </div>
-        <input
-          type="range"
+        <StepNumberInput
+          value={draft.waterTotal}
+          unit="ml"
           min={0}
           max={500}
-          value={draft.waterTotal}
-          onChange={(e) => setDraft({ ...draft, waterTotal: +e.target.value })}
-          style={{ width: "100%", accentColor: palette.leaf }}
+          step={10}
+          color={palette.leaf}
+          onChange={setWaterTotal}
         />
       </div>
 
@@ -1398,7 +1396,7 @@ function StatsView() {
       </div>
 
       <div style={cardStyle}>
-        <Label>みんなのエサ比率</Label>
+        <Label>みんなのごはん比率</Label>
         <RatioBar kibble={data.popularRatio.kibble} wet={data.popularRatio.wet} />
         <div
           style={{
@@ -1613,6 +1611,44 @@ function Tag({ children }) {
   );
 }
 
+function StepNumberInput({ value, unit, min, max, step, color, onChange }) {
+  const safeValue = Number.isFinite(value) ? value : min;
+  const changeByStep = (delta) => onChange(Math.max(min, Math.min(max, safeValue + delta)));
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
+        <span style={{ fontFamily: fontDisplay, fontSize: 36, fontWeight: 700, color }}>{safeValue}</span>
+        <span style={{ fontSize: 14, color: palette.inkSoft }}>{unit}</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={() => changeByStep(-step)} style={counterBtn} aria-label={`${unit}を減らす`}>
+          −
+        </button>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={safeValue}
+          onChange={(e) => {
+            const parsed = Number(e.target.value);
+            if (Number.isNaN(parsed)) return;
+            onChange(Math.max(min, Math.min(max, parsed)));
+          }}
+          style={{ ...inputStyle, textAlign: "center", fontWeight: 700, fontSize: 16, maxWidth: 120 }}
+        />
+        <button onClick={() => changeByStep(step)} style={counterBtn} aria-label={`${unit}を増やす`}>
+          +
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 6 }}>
+        {unit === "g" ? "±5gずつ調整できます" : "±10mlずつ調整できます"}
+      </div>
+    </div>
+  );
+}
+
 function Counter({ label, value, setValue, unit }) {
   return (
     <div>
@@ -1628,6 +1664,40 @@ function Counter({ label, value, setValue, unit }) {
         <button onClick={() => setValue(Math.min(20, value + 1))} style={counterBtn}>
           +
         </button>
+      </div>
+    </div>
+  );
+}
+
+function RatioSelector({ value, onChange }) {
+  const steps = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const safe = Number.isFinite(value) ? value : 0;
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {steps.map((pct) => (
+          <Pill key={pct} active={safe === pct} onClick={() => onChange(pct)}>
+            {pct}%
+          </Pill>
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+        <span style={{ fontSize: 11, color: palette.inkSoft }}>直接入力</span>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          value={safe}
+          onChange={(e) => {
+            const parsed = Number(e.target.value);
+            if (Number.isNaN(parsed)) return;
+            onChange(parsed);
+          }}
+          style={{ ...inputStyle, maxWidth: 90, textAlign: "center" }}
+        />
+        <span style={{ fontSize: 11, color: palette.inkSoft }}>%（カリカリ）</span>
       </div>
     </div>
   );
