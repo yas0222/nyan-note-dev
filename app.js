@@ -82,25 +82,31 @@ function createFirestoreGateway() {
   }
 }
 
-function mapCatToFirestore(cat, ownerUid) {
+function omitUndefinedFields(payload) {
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
+}
+
+function toFirestoreCatPayload(cat, ownerUid) {
   const now = new Date().toISOString();
-  return {
+  const payload = {
     ownerUid,
     name: cat.name,
     age: Number(cat.age),
-    sex: cat.gender,
+    sex: cat.gender ?? cat.sex,
     region: cat.region,
     coatPattern: cat.coatPattern || "",
     currentWeightKg: cat.currentWeightKg === "" ? null : Number(cat.currentWeightKg),
-    visibility: "private",
+    visibility: cat.visibility || "private",
+    hasLocalImage: Boolean(cat.photoImage),
     createdAt: cat.createdAt || now,
     updatedAt: now,
   };
+  return omitUndefinedFields(payload);
 }
 
-function mapRecordToFirestore(record, catId, ownerUid) {
+function toFirestoreRecordPayload(record, catId, ownerUid) {
   const now = new Date().toISOString();
-  return {
+  const payload = {
     ownerUid,
     catId: String(catId),
     date: record.date,
@@ -116,6 +122,7 @@ function mapRecordToFirestore(record, catId, ownerUid) {
     createdAt: record.createdAt || now,
     updatedAt: now,
   };
+  return omitUndefinedFields(payload);
 }
 
 const sampleCats = [
@@ -404,12 +411,13 @@ function CatHealthApp() {
       return;
     }
     try {
-      const payload = mapCatToFirestore(cat, ownerUid);
+      const payload = toFirestoreCatPayload(cat, ownerUid);
       await setDoc(doc(firestoreGateway.db, "cats", String(cat.id)), payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("猫プロフィール", true);
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
+      console.error("[Firestore] 猫プロフィール保存エラー詳細", e);
       updateFirestoreSaveDebug("猫プロフィール", false, e instanceof Error ? e.message : "不明なFirestoreエラー");
     }
   };
@@ -430,12 +438,13 @@ function CatHealthApp() {
       return;
     }
     try {
-      const payload = mapRecordToFirestore(record, catId, ownerUid);
+      const payload = toFirestoreRecordPayload(record, catId, ownerUid);
       await setDoc(doc(firestoreGateway.db, "records", String(record.id)), payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("日次記録", true);
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
+      console.error("[Firestore] 日次記録保存エラー詳細", e);
       updateFirestoreSaveDebug("日次記録", false, e instanceof Error ? e.message : "不明なFirestoreエラー");
     }
   };

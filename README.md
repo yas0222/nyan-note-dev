@@ -96,6 +96,7 @@ python3 -m http.server 8000
 - ただし `localStorage` 保存を常に優先し、Firestore 保存に失敗してもアプリが壊れない実装にしています。
 - Firebase 未設定時は自動でローカル運用（`localStorage` のみ）になります。
 - ログイン機能はまだ未実装です。現在は `anonymousOwnerId` を `localStorage` に生成し、`ownerUid` として利用します。
+- 猫プロフィール画像は現時点でも `localStorage` のみに保存し、Firestore（`cats` / `records`）には保存しません。Firestoreには `hasLocalImage` のような軽量フラグのみを保存します。
 
 ### Firebase プロジェクト作成手順（概要）
 
