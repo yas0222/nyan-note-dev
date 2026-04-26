@@ -166,6 +166,14 @@ function hasAtMostOneDecimal(weight) {
   return /^\d+(\.\d)?$/.test(weight.trim());
 }
 
+const CAT_AVATAR_COLORS = ["#D9A86A", "#E0B77D", "#CFA06D", "#C4A07A", "#D6B088"];
+
+function getCatAvatarColor(cat) {
+  const rawId = typeof cat?.id === "number" ? cat.id : Number(cat?.id) || 0;
+  const index = Math.abs(rawId) % CAT_AVATAR_COLORS.length;
+  return CAT_AVATAR_COLORS[index];
+}
+
 function validateCatForm(form) {
   const errors = [];
   if (!form.name.trim()) errors.push("名前は必須です。");
@@ -179,7 +187,6 @@ function validateCatForm(form) {
       errors.push("現在の体重は0より大きく30未満で入力してください（小数1桁）。");
     }
   }
-  if (!/^#[0-9A-Fa-f]{6}$/.test(form.color)) errors.push("色は#RRGGBB形式で入力してください。");
   return errors;
 }
 
@@ -304,7 +311,6 @@ function CatHealthApp() {
             gender: form.gender,
             coatPattern: form.coatPattern.trim(),
             photo: form.photo.trim() || "🐱",
-            color: form.color,
             region: form.region.trim(),
             currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
             source: "user",
@@ -331,7 +337,6 @@ function CatHealthApp() {
               gender: form.gender,
               coatPattern: form.coatPattern.trim(),
               photo: form.photo.trim() || "🐱",
-              color: form.color,
               region: form.region.trim(),
               currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
             }
@@ -594,7 +599,6 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
     gender: "♀",
     coatPattern: "",
     photo: "🐱",
-    color: "#D9A86A",
     region: "",
     currentWeightKg: "",
   });
@@ -606,7 +610,6 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
       gender: "♀",
       coatPattern: "",
       photo: "🐱",
-      color: "#D9A86A",
       region: "",
       currentWeightKg: "",
     });
@@ -623,7 +626,6 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
       gender: cat.gender,
       coatPattern: cat.coatPattern ?? "",
       photo: cat.photo,
-      color: cat.color,
       region: cat.region,
       currentWeightKg: cat.currentWeightKg ?? "",
     });
@@ -667,7 +669,7 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
                   width: 64,
                   height: 64,
                   borderRadius: "50%",
-                  background: cat.color,
+                  background: getCatAvatarColor(cat),
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -739,9 +741,6 @@ function HomeView({ cats, todayLogByCat, onPick, onAddCat, onUpdateCat, onDelete
               style={inputStyle}
               placeholder="例: 茶白、キジトラ、三毛"
             />
-          </InputRow>
-          <InputRow label="色(#RRGGBB)">
-            <input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} style={inputStyle} />
           </InputRow>
           <InputRow label="地域">
             <input value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} style={inputStyle} />
@@ -817,7 +816,7 @@ function MyCatView({ cat, log }) {
             width: 110,
             height: 110,
             borderRadius: "50%",
-            background: cat.color,
+            background: getCatAvatarColor(cat),
             margin: "0 auto",
             display: "flex",
             alignItems: "center",
