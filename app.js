@@ -276,13 +276,13 @@ function buildInitialData() {
 function newLogDraft(date = todayKey()) {
   return {
     date,
-    foodTotal: 70,
-    waterTotal: 180,
-    kibblePct: 70,
-    wetPct: 30,
-    snack: "ふつう",
-    poop: 1,
-    pee: 3,
+    foodTotal: 0,
+    waterTotal: 0,
+    kibblePct: 0,
+    wetPct: 0,
+    snack: "なし",
+    poop: 0,
+    pee: 0,
     weightKg: "",
     isPrivate: false,
   };
@@ -338,7 +338,12 @@ function validateLogForm(form) {
   if (form.waterTotal < 0 || form.waterTotal > 500) errors.push("飲水量は0〜500mlで入力してください。");
   if (form.kibblePct < 0 || form.kibblePct > 100) errors.push("カリカリ比率は0〜100で入力してください。");
   if (form.wetPct < 0 || form.wetPct > 100) errors.push("ウェット比率は0〜100で入力してください。");
-  if (form.kibblePct + form.wetPct !== 100) errors.push("カリカリとウェットの比率合計は100にしてください。");
+  const ratioTotal = form.kibblePct + form.wetPct;
+  if (form.foodTotal === 0) {
+    if (ratioTotal !== 0) errors.push("ごはん量が0gの場合、カリカリとウェットの比率はどちらも0%にしてください。");
+  } else if (ratioTotal !== 100) {
+    errors.push("カリカリとウェットの比率合計は100にしてください。");
+  }
   if (form.poop < 0 || form.poop > 20 || form.pee < 0 || form.pee > 20) errors.push("排泄回数は0〜20回で入力してください。");
   if (form.weightKg !== "") {
     const weight = parseWeight(form.weightKg);
@@ -1476,7 +1481,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
             <span>ウェット {draft.wetPct}%</span>
           </div>
           <RatioBar kibble={draft.kibblePct} wet={draft.wetPct} />
-          <RatioSelector value={draft.kibblePct} onChange={setKibble} />
+          <RatioSelector kibble={draft.kibblePct} wet={draft.wetPct} onChange={setKibble} />
         </div>
       </div>
 
@@ -2110,7 +2115,7 @@ function Counter({ label, value, setValue, unit }) {
   );
 }
 
-function RatioSelector({ value, onChange }) {
+function RatioSelector({ kibble, wet, onChange }) {
   const options = [
     { label: "カリカリだけ", kibble: 100, wet: 0 },
     { label: "カリカリ多め", kibble: 75, wet: 25 },
@@ -2118,19 +2123,22 @@ function RatioSelector({ value, onChange }) {
     { label: "ウェット多め", kibble: 25, wet: 75 },
     { label: "ウェットだけ", kibble: 0, wet: 100 },
   ];
-  const safe = Number.isFinite(value) ? value : 0;
+  const safeKibble = Number.isFinite(kibble) ? kibble : 0;
+  const safeWet = Number.isFinite(wet) ? wet : 0;
 
   return (
     <div style={{ marginTop: 10 }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {options.map((opt) => (
-          <Pill key={opt.label} active={safe === opt.kibble} onClick={() => onChange(opt.kibble)}>
+          <Pill key={opt.label} active={safeKibble === opt.kibble && safeWet === opt.wet} onClick={() => onChange(opt.kibble)}>
             {opt.label}
           </Pill>
         ))}
       </div>
-      {!options.some((opt) => opt.kibble === safe) && (
-        <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 8 }}>既存データの比率: カリカリ {safe}% / ウェット {100 - safe}%</div>
+      {!options.some((opt) => opt.kibble === safeKibble && opt.wet === safeWet) && (
+        <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 8 }}>
+          既存データの比率: カリカリ {safeKibble}% / ウェット {safeWet}%
+        </div>
       )}
     </div>
   );
