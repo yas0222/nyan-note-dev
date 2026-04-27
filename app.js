@@ -1468,6 +1468,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
   };
 
   const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
+  const recentLogs = sortedLogs.slice(0, 7);
   const dailyPoints = useMemo(() => {
     const points = [];
     for (let i = 6; i >= 0; i -= 1) {
@@ -1731,29 +1732,41 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
       )}
 
       <div style={{ ...cardStyle, marginTop: 12 }}>
-        <Label>記録一覧</Label>
-        {sortedLogs.length === 0 && <div style={{ fontSize: 12, color: palette.inkSoft }}>まだ記録がありません。</div>}
-        {sortedLogs.map((row) => (
-          <div key={row.id} style={{ borderTop: `1px dashed ${palette.line}`, padding: "10px 0" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ fontFamily: fontDisplay, fontSize: 16, fontWeight: 700 }}>{row.date}</div>
-              <span style={{ fontSize: 11, color: palette.inkSoft }}>{row.isPrivate ? "匿名共有" : "名前公開"}</span>
+        <Label>記録履歴（直近7件）</Label>
+        {recentLogs.length === 0 && <div style={{ fontSize: 12, color: palette.inkSoft }}>まだ記録がありません。</div>}
+        <div style={{ display: "grid", gap: 8 }}>
+          {recentLogs.map((row) => (
+            <div
+              key={row.id}
+              style={{
+                border: `1px solid ${palette.line}`,
+                borderRadius: 12,
+                padding: "10px 12px",
+                background: palette.cream,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ fontFamily: fontDisplay, fontSize: 15, fontWeight: 700 }}>{row.date}</div>
+                <span style={{ fontSize: 11, color: palette.inkSoft }}>{row.isPrivate ? "匿名共有" : "名前公開"}</span>
+              </div>
+              <div style={{ display: "grid", gap: 4, marginTop: 6, fontSize: 12, color: palette.inkSoft, lineHeight: 1.45 }}>
+                <div>ごはん量 {row.foodTotal}g</div>
+                <div>
+                  カリカリ {row.kibblePct}% / ウェット {row.wetPct}%
+                </div>
+                <div>水分量 {row.waterTotal}ml</div>
+                <div>おやつ {row.snack}</div>
+                <div>うんち回数 {row.poop}回</div>
+                <div>おしっこ回数 {row.pee}回</div>
+                {row.weightKg !== "" && row.weightKg != null && <div>体重 {Number(row.weightKg).toFixed(1)}kg</div>}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <MiniButton onClick={() => startEdit(row)}>編集</MiniButton>
+                <MiniButton onClick={() => deleteLog(cat.id, row.id)}>削除</MiniButton>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-              <Tag>ごはん量 {row.foodTotal}g</Tag>
-              <Tag>飲水量 {row.waterTotal}ml</Tag>
-              {row.weightKg !== "" && <Tag>体重 {Number(row.weightKg).toFixed(1)}kg</Tag>}
-              <Tag>比率 {row.kibblePct}:{row.wetPct}</Tag>
-              <Tag>おやつ量 {row.snack}</Tag>
-              <Tag>うんち回数 {row.poop}回</Tag>
-              <Tag>おしっこ回数 {row.pee}回</Tag>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-              <MiniButton onClick={() => startEdit(row)}>編集</MiniButton>
-              <MiniButton onClick={() => deleteLog(cat.id, row.id)}>削除</MiniButton>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <SevenDayStatusCard cat={cat} points={dailyPoints} />
