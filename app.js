@@ -53,9 +53,11 @@ function createFirestoreGateway() {
     return {
       enabled: false,
       db: null,
+      auth: null,
       configStatus: "Firebase未設定",
       appInitStatus: "Firebase app 初期化失敗",
       firestoreInitStatus: "Firestore 初期化失敗",
+      authInitStatus: "Firebase Auth 初期化失敗",
       initErrorMessage: "Firebase設定が未入力です",
       initErrorCode: "firebase/config-missing",
     };
@@ -68,12 +70,15 @@ function createFirestoreGateway() {
     }
     firebaseSdk.apps.length ? firebaseSdk.app() : firebaseSdk.initializeApp(FIREBASE_CONFIG);
     const db = firebaseSdk.firestore();
+    const auth = typeof firebaseSdk.auth === "function" ? firebaseSdk.auth() : null;
     return {
       enabled: true,
       db,
+      auth,
       configStatus: "Firebase設定済み",
       appInitStatus: "Firebase app 初期化成功",
       firestoreInitStatus: "Firestore 初期化成功",
+      authInitStatus: auth ? "Firebase Auth 初期化成功" : "Firebase Auth 未読込",
       initErrorMessage: "",
       initErrorCode: "",
     };
@@ -84,9 +89,11 @@ function createFirestoreGateway() {
     return {
       enabled: false,
       db: null,
+      auth: null,
       configStatus: "Firebase設定済み",
       appInitStatus: "Firebase app 初期化失敗",
       firestoreInitStatus: "Firestore 初期化失敗",
+      authInitStatus: "Firebase Auth 初期化失敗",
       initErrorMessage: details.message,
       initErrorCode: details.code,
     };
@@ -377,7 +384,8 @@ function hydrateLogDraft(log) {
 }
 
 function CatHealthApp() {
-  const [ownerUid] = useState(() => getOrCreateAnonymousOwnerId());
+  const [localOwnerUid] = useState(() => getOrCreateAnonymousOwnerId());
+  const [authOwnerUid, setAuthOwnerUid] = useState("");
   const [firestoreGateway] = useState(() => createFirestoreGateway());
   const [firebaseStatus, setFirebaseStatus] = useState(
     firestoreGateway.firestoreInitStatus === "Firestore 初期化成功" ? "Firebase保存可能" : "Firebase保存エラー",
@@ -386,12 +394,15 @@ function CatHealthApp() {
     configStatus: firestoreGateway.configStatus,
     appInitStatus: firestoreGateway.appInitStatus,
     firestoreInitStatus: firestoreGateway.firestoreInitStatus,
+    authInitStatus: firestoreGateway.authInitStatus,
+    authStatus: "未認証",
     lastCatSaveResult: "未実行",
     lastRecordSaveResult: "未実行",
     lastConnectionTestResult: "未実行",
     lastErrorCode: firestoreGateway.initErrorCode || "",
     lastErrorMessage: firestoreGateway.initErrorMessage || "",
   }));
+  const ownerUid = authOwnerUid || localOwnerUid;
   const [tab, setTab] = useState("home");
   const [data, setData] = useState(() => {
     try {
@@ -532,6 +543,47 @@ function CatHealthApp() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [data]);
+
+  useEffect(() => {
+    const runAnonymousAuth = async () => {
+      if (!firestoreGateway.enabled || !firestoreGateway.auth) {
+        setFirebaseDebug((prev) => ({
+          ...prev,
+          authStatus: "未認証",
+        }));
+        return;
+      }
+      setFirebaseDebug((prev) => ({
+        ...prev,
+        authStatus: "匿名ログイン中",
+      }));
+      try {
+        const result = await firestoreGateway.auth.signInAnonymously();
+        const uid = result?.user?.uid || firestoreGateway.auth.currentUser?.uid || "";
+        if (!uid) {
+          throw new Error("匿名ログインでuidを取得できませんでした");
+        }
+        setAuthOwnerUid(uid);
+        setFirebaseDebug((prev) => ({
+          ...prev,
+          authStatus: "匿名ログイン済み",
+          lastErrorCode: "",
+          lastErrorMessage: "",
+        }));
+      } catch (e) {
+        const details = getFirebaseErrorDetails(e);
+        console.error("[Firebase Auth] 匿名ログイン失敗", details, e);
+        if (e && e.stack) console.error("[Firebase Auth] 匿名ログイン失敗スタック", e.stack);
+        setFirebaseDebug((prev) => ({
+          ...prev,
+          authStatus: "認証エラー",
+          lastErrorCode: details.code,
+          lastErrorMessage: details.message,
+        }));
+      }
+    };
+    runAnonymousAuth();
+  }, [firestoreGateway]);
 
   useEffect(() => {
     if (!data.cats.length) {
@@ -1137,6 +1189,8 @@ function HomeView({
         <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 6 }}>Firebase: {firebaseDebug.configStatus}</div>
         <div style={{ fontSize: 11, color: palette.inkSoft }}>Firebase app: {firebaseDebug.appInitStatus}</div>
         <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore: {firebaseDebug.firestoreInitStatus}</div>
+        <div style={{ fontSize: 11, color: palette.inkSoft }}>Firebase Auth: {firebaseDebug.authInitStatus}</div>
+        <div style={{ fontSize: 11, color: palette.inkSoft }}>認証状態: {firebaseDebug.authStatus}</div>
         <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の猫プロフィール保存結果: {firebaseDebug.lastCatSaveResult}</div>
         <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の日次記録保存結果: {firebaseDebug.lastRecordSaveResult}</div>
         <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore接続テスト: {firebaseDebug.lastConnectionTestResult}</div>

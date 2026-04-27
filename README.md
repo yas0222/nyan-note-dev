@@ -95,12 +95,15 @@ python3 -m http.server 8000
 - Firestore 保存の土台を追加しました。猫プロフィール（`cats`）と日次記録（`records`）を Firestore に保存できる構造です。
 - ただし `localStorage` 保存を常に優先し、Firestore 保存に失敗してもアプリが壊れない実装にしています。
 - Firebase 未設定時は自動でローカル運用（`localStorage` のみ）になります。
-- ログイン機能はまだ未実装です。現在は `anonymousOwnerId` を `localStorage` に生成し、`ownerUid` として利用します。
+- Firebase Authentication の匿名ログインを実装しています。アプリ起動時に匿名ログインを試行し、成功時は `auth.currentUser.uid` を `ownerUid` として利用します。
+- Firebase Auth が利用できない、または匿名ログインに失敗した場合は、既存の `localStorage` の `anonymousOwnerId` をフォールバックとして継続利用します（既存データは削除しません）。
+- 将来的には Google ログイン / Apple ログインへ拡張する予定です（現在は匿名認証のみ）。
 - 猫プロフィール画像は現時点でも `localStorage` のみに保存し、Firestore（`cats` / `records`）には保存しません。Firestoreには `hasLocalImage` のような軽量フラグのみを保存します。
 - 設定カード内に「Firebase診断」を追加し、以下を画面で確認できます。
   - Firebase config 設定有無
   - Firebase app 初期化成功 / 失敗
   - Firestore 初期化成功 / 失敗
+  - 認証状態（未認証 / 匿名ログイン中 / 匿名ログイン済み / 認証エラー）
   - 最後の猫プロフィール保存結果
   - 最後の日次記録保存結果
   - 最後の Firebase エラーコード / メッセージ
@@ -125,6 +128,7 @@ python3 -m http.server 8000
 
 ```html
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="app.js"></script>
 ```
@@ -145,10 +149,11 @@ python3 -m http.server 8000
 
 ### 現時点の制約と今後の方針
 
-- 現時点では Firebase Authentication は未実装です（匿名IDで代替）。
+- 現時点の認証方式は Firebase Authentication の匿名認証です。
+- 将来的には Google ログイン / Apple ログインへ拡張する予定です。
 - 画像は Firebase Storage へは移行していません（引き続き localStorage 保存）。
 - 将来リリースに向け、以下の対応が必要です。
-  - Firebase Authentication 導入
+  - Google / Apple ログイン導入（匿名認証からの拡張）
   - Firebase Storage への画像保存移行
   - PWA 化
   - Capacitor による Android / iOS アプリ化
