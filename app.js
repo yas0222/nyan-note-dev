@@ -827,9 +827,12 @@ function CatHealthApp() {
           <HomeView
             cats={data.cats}
             todayLogByCat={todayLogByCat}
-            onPick={(c) => {
-              setSelectedCatId(c.id);
-              setTab("mycat");
+            selectedCatId={selectedCatId}
+            onPick={(c) => setSelectedCatId(c.id)}
+            onOpenTodayLog={(catId) => {
+              setSelectedCatId(catId);
+              setTab("log");
+              setMessage("記録フォームを表示しました。");
             }}
             onAddCat={addCat}
             onUpdateCat={updateCat}
@@ -937,7 +940,9 @@ function Header() {
 function HomeView({
   cats,
   todayLogByCat,
+  selectedCatId,
   onPick,
+  onOpenTodayLog,
   onAddCat,
   onUpdateCat,
   onDeleteCat,
@@ -964,6 +969,8 @@ function HomeView({
     region: "",
     currentWeightKg: "",
   });
+  const selectedCat = cats.find((cat) => cat.id === selectedCatId) || cats[0] || null;
+  const selectedCatTodayLog = selectedCat ? todayLogByCat[selectedCat.id] : null;
 
   const resetForm = () => {
     setForm({
@@ -1028,8 +1035,27 @@ function HomeView({
   return (
     <div>
       <SectionLabel left="今日の記録" right={dateStr} />
+      {selectedCat && (
+        <div style={{ ...cardStyle, padding: "14px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.05em" }}>選択中の猫ちゃん</div>
+              <div style={{ fontFamily: fontDisplay, fontSize: 18, fontWeight: 700, marginTop: 2 }}>
+                {selectedCat.name} <span style={{ fontSize: 13, color: palette.accent }}>{selectedCat.gender}</span>
+              </div>
+              <div style={{ marginTop: 4, fontSize: 11, color: selectedCatTodayLog ? palette.leaf : palette.accent, fontWeight: 700 }}>
+                {selectedCatTodayLog ? "今日の記録済み ✓" : "今日の記録はまだです"}
+              </div>
+            </div>
+            <MiniButton onClick={() => onOpenTodayLog(selectedCat.id)}>
+              {selectedCatTodayLog ? "今日の記録を編集" : "今日の記録をつける"}
+            </MiniButton>
+          </div>
+        </div>
+      )}
       {cats.map((cat, i) => {
         const hasToday = Boolean(todayLogByCat[cat.id]);
+        const isSelected = selectedCat?.id === cat.id;
         return (
           <div key={cat.id}>
             <button
@@ -1045,6 +1071,7 @@ function HomeView({
                 textAlign: "left",
                 transform: i % 2 === 0 ? "rotate(-0.4deg)" : "rotate(0.4deg)",
                 marginBottom: 6,
+                border: isSelected ? `2px solid ${palette.accentSoft}` : `1px solid ${palette.line}`,
               }}
             >
               <div
@@ -1088,9 +1115,13 @@ function HomeView({
                   {hasToday ? "✓ 今日の記録あり" : "◯ 今日の記録なし"}
                 </div>
               </div>
-              <div style={{ fontSize: 24, color: palette.inkSoft }}>›</div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                {isSelected && <div style={{ fontSize: 10, color: palette.accent, fontWeight: 700 }}>選択中</div>}
+                <div style={{ fontSize: 24, color: palette.inkSoft }}>›</div>
+              </div>
             </button>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12, marginTop: -2 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12, marginTop: -2, flexWrap: "wrap" }}>
+              <MiniButton onClick={() => onOpenTodayLog(cat.id)}>{hasToday ? "今日の記録を編集" : "今日の記録をつける"}</MiniButton>
               <MiniButton onClick={() => beginEdit(cat)}>編集</MiniButton>
               <MiniButton onClick={() => onDeleteCat(cat.id)}>削除</MiniButton>
             </div>
