@@ -932,6 +932,7 @@ function HomeView({
   const today = new Date();
   const dateStr = `${today.getMonth() + 1}月${today.getDate()}日`;
   const [showAdd, setShowAdd] = useState(false);
+  const [showDevMenu, setShowDevMenu] = useState(false);
   const [editingCatId, setEditingCatId] = useState(null);
   const [errors, setErrors] = useState([]);
   const [form, setForm] = useState({
@@ -1172,35 +1173,44 @@ function HomeView({
         </button>
       )}
 
-      <div style={{ ...cardStyle, borderStyle: "dashed" }}>
-        <Label>データ管理</Label>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <MiniButton onClick={onDeleteSampleOnly}>サンプルだけ削除</MiniButton>
-          <MiniButton onClick={onResetAllData}>全データをリセット</MiniButton>
-        </div>
-      </div>
+      <div style={devMenuCardStyle}>
+        <button type="button" onClick={() => setShowDevMenu((prev) => !prev)} style={devMenuToggleStyle}>
+          開発用メニュー {showDevMenu ? "▲" : "▼"}
+        </button>
+        {showDevMenu && (
+          <>
+            <div style={{ ...cardStyle, borderStyle: "dashed", marginTop: 10 }}>
+              <Label>データ管理</Label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <MiniButton onClick={onDeleteSampleOnly}>サンプルだけ削除</MiniButton>
+                <MiniButton onClick={onResetAllData}>全データをリセット</MiniButton>
+              </div>
+            </div>
 
-      <div style={{ ...cardStyle, padding: "12px 14px", marginTop: -4 }}>
-        <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.05em", marginBottom: 4 }}>Firebase診断</div>
-        <div style={{ fontSize: 12, color: palette.ink }}>
-          Firebase接続状態:{" "}
-          <span style={{ color: firebaseStatus === "Firebase保存エラー" ? palette.accent : palette.inkSoft }}>{firebaseStatus}</span>
-        </div>
-        <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 6 }}>Firebase: {firebaseDebug.configStatus}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>Firebase app: {firebaseDebug.appInitStatus}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore: {firebaseDebug.firestoreInitStatus}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>Firebase Auth: {firebaseDebug.authInitStatus}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>認証状態: {firebaseDebug.authStatus}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の猫プロフィール保存結果: {firebaseDebug.lastCatSaveResult}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の日次記録保存結果: {firebaseDebug.lastRecordSaveResult}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore接続テスト: {firebaseDebug.lastConnectionTestResult}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>最後のFirebaseエラーコード: {firebaseDebug.lastErrorCode || "なし"}</div>
-        <div style={{ fontSize: 11, color: palette.inkSoft }}>
-          最後のFirebaseエラーメッセージ: {firebaseDebug.lastErrorMessage || "なし"}
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <MiniButton onClick={onRunFirestoreConnectionTest}>Firestore接続テスト</MiniButton>
-        </div>
+            <div style={{ ...cardStyle, padding: "12px 14px", marginTop: -4 }}>
+              <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.05em", marginBottom: 4 }}>Firebase診断</div>
+              <div style={{ fontSize: 12, color: palette.ink }}>
+                Firebase接続状態:{" "}
+                <span style={{ color: firebaseStatus === "Firebase保存エラー" ? palette.accent : palette.inkSoft }}>{firebaseStatus}</span>
+              </div>
+              <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 6 }}>Firebase: {firebaseDebug.configStatus}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>Firebase app: {firebaseDebug.appInitStatus}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore: {firebaseDebug.firestoreInitStatus}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>Firebase Auth: {firebaseDebug.authInitStatus}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>認証状態: {firebaseDebug.authStatus}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の猫プロフィール保存結果: {firebaseDebug.lastCatSaveResult}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の日次記録保存結果: {firebaseDebug.lastRecordSaveResult}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore接続テスト: {firebaseDebug.lastConnectionTestResult}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>最後のFirebaseエラーコード: {firebaseDebug.lastErrorCode || "なし"}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>
+                最後のFirebaseエラーメッセージ: {firebaseDebug.lastErrorMessage || "なし"}
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <MiniButton onClick={onRunFirestoreConnectionTest}>Firestore接続テスト</MiniButton>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1905,6 +1915,26 @@ const inputStyle = {
   fontFamily: fontBody,
   fontSize: 13,
   color: palette.ink,
+};
+
+const devMenuCardStyle = {
+  ...cardStyle,
+  padding: 10,
+};
+
+const devMenuToggleStyle = {
+  width: "100%",
+  border: `1px solid ${palette.line}`,
+  background: palette.cream,
+  color: palette.inkSoft,
+  borderRadius: 10,
+  padding: "8px 12px",
+  fontSize: 12,
+  fontFamily: fontBody,
+  fontWeight: 600,
+  letterSpacing: "0.03em",
+  textAlign: "left",
+  cursor: "pointer",
 };
 
 function SectionLabel({ left, right }) {
