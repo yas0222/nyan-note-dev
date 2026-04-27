@@ -1324,79 +1324,67 @@ function MyCatView({ cats, logsByCat }) {
   );
 }
 
-function SevenDayStatusCard({ cat, points }) {
-  const maxFood = Math.max(...points.map((p) => p.foodTotal || 0), 1);
-  const maxWater = Math.max(...points.map((p) => p.waterTotal || 0), 1);
-  const weightPoints = points.filter((p) => p.weightKg !== null);
-  const maxWeight = Math.max(...weightPoints.map((p) => p.weightKg), 1);
+function SevenDayMiniSummaryCard({ logs }) {
+  const summary = useMemo(() => {
+    const targetDateKeys = new Set(Array.from({ length: 7 }, (_, i) => daysAgoKey(i)));
+    const recentLogs = logs
+      .filter((row) => targetDateKeys.has(row.date))
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    const count = recentLogs.length;
+    if (count === 0) return null;
+
+    const avg = (total) => (total / count).toFixed(1);
+    const latestWeightRow = recentLogs.find((row) => row.weightKg !== "" && row.weightKg != null && Number.isFinite(Number(row.weightKg)));
+
+    return {
+      recordDays: count,
+      avgFood: avg(recentLogs.reduce((sum, row) => sum + Number(row.foodTotal || 0), 0)),
+      avgWater: avg(recentLogs.reduce((sum, row) => sum + Number(row.waterTotal || 0), 0)),
+      avgPoop: avg(recentLogs.reduce((sum, row) => sum + Number(row.poop || 0), 0)),
+      avgPee: avg(recentLogs.reduce((sum, row) => sum + Number(row.pee || 0), 0)),
+      latestWeight: latestWeightRow ? Number(latestWeightRow.weightKg).toFixed(1) : null,
+    };
+  }, [logs]);
 
   return (
     <div style={{ ...cardStyle, marginTop: 12 }}>
-      <Label>7日間のようす</Label>
-      <div style={{ fontSize: 11, color: palette.inkSoft, marginBottom: 10 }}>{cat.name} の過去7日間</div>
-      <div style={{ display: "grid", gap: 10 }}>
-        {points.map((point) => {
-          if (!point.hasRecord) {
-            return (
-              <div
-                key={point.date}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "56px 1fr",
-                  alignItems: "center",
-                  gap: 10,
-                  paddingBottom: 6,
-                  borderBottom: `1px dashed ${palette.line}`,
-                }}
-              >
-                <div style={{ fontSize: 11, color: palette.inkSoft }}>{point.date.slice(5)}</div>
-                <div style={{ fontSize: 12, color: palette.accent, fontWeight: 700 }}>未記録</div>
-              </div>
-            );
-          }
-
-          return (
-            <div
-              key={point.date}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "56px 1fr",
-                gap: 10,
-                paddingBottom: 6,
-                borderBottom: `1px dashed ${palette.line}`,
-              }}
-            >
-              <div style={{ fontSize: 11, color: palette.inkSoft, paddingTop: 2 }}>{point.date.slice(5)}</div>
-              <div style={{ display: "grid", gap: 4 }}>
-                <TrendRow label="ごはん" value={`${point.foodTotal}g`} ratio={point.foodTotal / maxFood} color={palette.accentSoft} />
-                <TrendRow label="飲水量" value={`${point.waterTotal}ml`} ratio={point.waterTotal / maxWater} color={palette.leaf} />
-                {point.weightKg !== null && (
-                  <TrendRow label="体重" value={`${point.weightKg.toFixed(1)}kg`} ratio={point.weightKg / maxWeight} color={palette.inkSoft} />
-                )}
-                <div style={{ fontSize: 11, color: palette.ink }}>うんち回数 {point.poop}回 / おしっこ回数 {point.pee}回</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <Label>7日間のまとめ</Label>
+      {!summary ? (
+        <div style={{ fontSize: 12, color: palette.inkSoft }}>まだ7日間サマリーを表示できる記録がありません</div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 8,
+          }}
+        >
+          <MiniSummaryItem label="記録日数" value={`${summary.recordDays}日`} />
+          <MiniSummaryItem label="平均ごはん" value={`${summary.avgFood}g`} />
+          <MiniSummaryItem label="平均水分" value={`${summary.avgWater}ml`} />
+          <MiniSummaryItem label="うんち" value={`${summary.avgPoop}回`} />
+          <MiniSummaryItem label="おしっこ" value={`${summary.avgPee}回`} />
+          <MiniSummaryItem label="最新体重" value={summary.latestWeight ? `${summary.latestWeight}kg` : "未入力"} />
+        </div>
+      )}
     </div>
   );
 }
 
-function TrendRow({ label, value, ratio, color }) {
+function MiniSummaryItem({ label, value }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 52px", alignItems: "center", gap: 8 }}>
-      <div style={{ fontSize: 11, color: palette.inkSoft }}>{label}</div>
-      <div style={{ height: 8, background: "#EFE6D0", borderRadius: 999, overflow: "hidden" }}>
-        <div
-          style={{
-            width: `${Math.max(0, Math.min(1, ratio)) * 100}%`,
-            height: "100%",
-            background: color,
-          }}
-        />
-      </div>
-      <div style={{ fontSize: 11, textAlign: "right", color: palette.ink }}>{value}</div>
+    <div
+      style={{
+        border: `1px solid ${palette.line}`,
+        borderRadius: 10,
+        background: palette.cream,
+        padding: "8px 6px",
+        minHeight: 56,
+      }}
+    >
+      <div style={{ fontSize: 10, color: palette.inkSoft, lineHeight: 1.3 }}>{label}</div>
+      <div style={{ fontSize: 13, color: palette.ink, fontWeight: 700, marginTop: 3, lineHeight: 1.3 }}>{value}</div>
     </div>
   );
 }
@@ -1469,24 +1457,6 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
 
   const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
   const recentLogs = sortedLogs.slice(0, 7);
-  const dailyPoints = useMemo(() => {
-    const points = [];
-    for (let i = 6; i >= 0; i -= 1) {
-      const key = daysAgoKey(i);
-      const hit = logs.find((row) => row.date === key);
-      points.push({
-        date: key,
-        hasRecord: Boolean(hit),
-        foodTotal: hit?.foodTotal ?? 0,
-        waterTotal: hit?.waterTotal ?? 0,
-        weightKg: hit?.weightKg === "" || hit?.weightKg == null ? null : Number(hit.weightKg),
-        poop: hit?.poop ?? 0,
-        pee: hit?.pee ?? 0,
-      });
-    }
-    return points;
-  }, [logs]);
-
   return (
     <div>
       <SectionLabel left="きょうの記録" right="🖋" />
@@ -1731,6 +1701,8 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
         </button>
       )}
 
+      <SevenDayMiniSummaryCard logs={logs} />
+
       <div style={{ ...cardStyle, marginTop: 12 }}>
         <Label>記録履歴（直近7件）</Label>
         {recentLogs.length === 0 && <div style={{ fontSize: 12, color: palette.inkSoft }}>まだ記録がありません。</div>}
@@ -1769,7 +1741,6 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
         </div>
       </div>
 
-      <SevenDayStatusCard cat={cat} points={dailyPoints} />
     </div>
   );
 }
