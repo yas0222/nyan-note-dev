@@ -1355,71 +1355,6 @@ function MyCatView({ cats, logsByCat }) {
   );
 }
 
-function SevenDayMiniSummaryCard({ logs }) {
-  const summary = useMemo(() => {
-    const targetDateKeys = new Set(Array.from({ length: 7 }, (_, i) => daysAgoKey(i)));
-    const recentLogs = logs
-      .filter((row) => targetDateKeys.has(row.date))
-      .sort((a, b) => b.date.localeCompare(a.date));
-
-    const count = recentLogs.length;
-    if (count === 0) return null;
-
-    const avg = (total) => (total / count).toFixed(1);
-    const latestWeightRow = recentLogs.find((row) => row.weightKg !== "" && row.weightKg != null && Number.isFinite(Number(row.weightKg)));
-
-    return {
-      recordDays: count,
-      avgFood: avg(recentLogs.reduce((sum, row) => sum + Number(row.foodTotal || 0), 0)),
-      avgWater: avg(recentLogs.reduce((sum, row) => sum + Number(row.waterTotal || 0), 0)),
-      avgPoop: avg(recentLogs.reduce((sum, row) => sum + Number(row.poop || 0), 0)),
-      avgPee: avg(recentLogs.reduce((sum, row) => sum + Number(row.pee || 0), 0)),
-      latestWeight: latestWeightRow ? Number(latestWeightRow.weightKg).toFixed(1) : null,
-    };
-  }, [logs]);
-
-  return (
-    <div style={{ ...cardStyle, marginTop: 12 }}>
-      <Label>7日間のまとめ</Label>
-      {!summary ? (
-        <div style={{ fontSize: 12, color: palette.inkSoft }}>まだ7日間サマリーを表示できる記録がありません</div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 8,
-          }}
-        >
-          <MiniSummaryItem label="記録日数" value={`${summary.recordDays}日`} />
-          <MiniSummaryItem label="平均ごはん" value={`${summary.avgFood}g`} />
-          <MiniSummaryItem label="平均水分" value={`${summary.avgWater}ml`} />
-          <MiniSummaryItem label="うんち" value={`${summary.avgPoop}回`} />
-          <MiniSummaryItem label="おしっこ" value={`${summary.avgPee}回`} />
-          <MiniSummaryItem label="最新体重" value={summary.latestWeight ? `${summary.latestWeight}kg` : "未入力"} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MiniSummaryItem({ label, value }) {
-  return (
-    <div
-      style={{
-        border: `1px solid ${palette.line}`,
-        borderRadius: 10,
-        background: palette.cream,
-        padding: "8px 6px",
-        minHeight: 56,
-      }}
-    >
-      <div style={{ fontSize: 10, color: palette.inkSoft, lineHeight: 1.3 }}>{label}</div>
-      <div style={{ fontSize: 13, color: palette.ink, fontWeight: 700, marginTop: 3, lineHeight: 1.3 }}>{value}</div>
-    </div>
-  );
-}
-
 function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHome, onShowMessage }) {
   const [draft, setDraft] = useState(newLogDraft());
   const [editingId, setEditingId] = useState(null);
@@ -1731,8 +1666,6 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
           新規記録モードに戻す
         </button>
       )}
-
-      <SevenDayMiniSummaryCard logs={logs} />
 
       <div style={{ ...cardStyle, marginTop: 12 }}>
         <Label>記録履歴（直近7件）</Label>
