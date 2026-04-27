@@ -836,6 +836,7 @@ function CatHealthApp() {
             cats={data.cats}
             setSelectedCat={(c) => setSelectedCatId(c.id)}
             onMoveHome={() => setTab("home")}
+            onShowMessage={setMessage}
           />
         )}
         {tab === "log" && !selectedCat && <EmptyCatPrompt onMoveLog={() => setTab("home")} />}
@@ -1384,11 +1385,22 @@ function TrendRow({ label, value, ratio, color }) {
   );
 }
 
-function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHome }) {
+function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHome, onShowMessage }) {
   const [draft, setDraft] = useState(newLogDraft());
   const [editingId, setEditingId] = useState(null);
   const [errors, setErrors] = useState([]);
   const [lastSaved, setLastSaved] = useState(null);
+  const logFormRef = useRef(null);
+
+  const scrollToLogForm = () => {
+    if (!logFormRef.current) return;
+    const topPadding = 24;
+    const targetTop = logFormRef.current.getBoundingClientRect().top + window.scrollY - topPadding;
+    window.scrollTo({
+      top: Math.max(targetTop, 0),
+      behavior: "smooth",
+    });
+  };
 
   useEffect(() => {
     const today = logs.find((l) => l.date === todayKey());
@@ -1396,6 +1408,13 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
     setEditingId(today?.id || null);
     setErrors([]);
   }, [cat.id, logs]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      scrollToLogForm();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [cat.id]);
 
   const setKibble = (v) => {
     const next = Math.max(0, Math.min(100, Number.isFinite(v) ? Math.round(v) : 0));
@@ -1426,6 +1445,10 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
     setDraft(hydrateLogDraft(log));
     setEditingId(log.id);
     setErrors([]);
+    if (onShowMessage) onShowMessage("記録フォームを表示しました。");
+    window.setTimeout(() => {
+      scrollToLogForm();
+    }, 0);
   };
 
   const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
@@ -1476,7 +1499,7 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
         ))}
       </div>
 
-      <div style={cardStyle}>
+      <div ref={logFormRef} style={cardStyle}>
         <Label>📅 記録日</Label>
         <input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} style={inputStyle} />
       </div>
@@ -1671,6 +1694,10 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
             setEditingId(null);
             setDraft(newLogDraft());
             setErrors([]);
+            if (onShowMessage) onShowMessage("記録フォームを表示しました。");
+            window.setTimeout(() => {
+              scrollToLogForm();
+            }, 0);
           }}
           style={{
             width: "100%",
