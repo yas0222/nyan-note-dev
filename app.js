@@ -1461,7 +1461,6 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
   };
 
   const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
-  const recentLogs = sortedLogs.slice(0, 7);
   const logMapByDate = Object.fromEntries(logs.map((row) => [row.date, row]));
   const calendarCells = monthCellDates(calendarMonth);
   const selectedLog = logMapByDate[selectedDateKey] || null;
@@ -1798,44 +1797,6 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
               この日の記録はありません
             </div>
           )}
-        </div>
-      </div>
-
-      <div style={{ ...cardStyle, marginTop: 12 }}>
-        <Label>記録履歴（直近7件）</Label>
-        {recentLogs.length === 0 && <div style={{ fontSize: 12, color: palette.inkSoft }}>まだ記録がありません。</div>}
-        <div style={{ display: "grid", gap: 8 }}>
-          {recentLogs.map((row) => (
-            <div
-              key={row.id}
-              style={{
-                border: `1px solid ${palette.line}`,
-                borderRadius: 12,
-                padding: "10px 12px",
-                background: palette.cream,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <div style={{ fontFamily: fontDisplay, fontSize: 15, fontWeight: 700 }}>{row.date}</div>
-                <span style={{ fontSize: 11, color: palette.inkSoft }}>{row.isPrivate ? "匿名共有" : "名前公開"}</span>
-              </div>
-              <div style={{ display: "grid", gap: 4, marginTop: 6, fontSize: 12, color: palette.inkSoft, lineHeight: 1.45 }}>
-                <div>ごはん量 {row.foodTotal}g</div>
-                <div>
-                  カリカリ {row.kibblePct}% / ウェット {row.wetPct}%
-                </div>
-                <div>水分量 {row.waterTotal}ml</div>
-                <div>おやつ {row.snack}</div>
-                <div>うんち回数 {row.poop}回</div>
-                <div>おしっこ回数 {row.pee}回</div>
-                {row.weightKg !== "" && row.weightKg != null && <div>体重 {Number(row.weightKg).toFixed(1)}kg</div>}
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <MiniButton onClick={() => startEdit(row)}>編集</MiniButton>
-                <MiniButton onClick={() => deleteLog(cat.id, row.id)}>削除</MiniButton>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 
