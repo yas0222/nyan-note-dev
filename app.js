@@ -442,19 +442,21 @@ function CatHealthApp() {
   const saveCatToCloud = async (cat) => {
     if (!firestoreGateway.enabled || !firestoreGateway.db) {
       updateFirestoreSaveDebug("猫プロフィール", false, "firestore/not-initialized", "Firestore未初期化のため保存をスキップしました");
-      return;
+      return { ok: false };
     }
     try {
       const payload = toFirestoreCatPayload(cat, ownerUid);
       await firestoreGateway.db.collection("cats").doc(String(cat.id)).set(payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("猫プロフィール", true);
+      return { ok: true };
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
       console.error("[Firestore] 猫プロフィール保存エラー詳細", e);
       if (e && e.stack) console.error("[Firestore] 猫プロフィール保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
       updateFirestoreSaveDebug("猫プロフィール", false, details.code, details.message);
+      return { ok: false };
     }
   };
 
@@ -471,19 +473,21 @@ function CatHealthApp() {
   const saveRecordToCloud = async (record, catId) => {
     if (!firestoreGateway.enabled || !firestoreGateway.db) {
       updateFirestoreSaveDebug("日次記録", false, "firestore/not-initialized", "Firestore未初期化のため保存をスキップしました");
-      return;
+      return { ok: false };
     }
     try {
       const payload = toFirestoreRecordPayload(record, catId, ownerUid);
       await firestoreGateway.db.collection("records").doc(String(record.id)).set(payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("日次記録", true);
+      return { ok: true };
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
       console.error("[Firestore] 日次記録保存エラー詳細", e);
       if (e && e.stack) console.error("[Firestore] 日次記録保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
       updateFirestoreSaveDebug("日次記録", false, details.code, details.message);
+      return { ok: false };
     }
   };
 
@@ -612,7 +616,7 @@ function CatHealthApp() {
     setData((prev) => ({ ...prev, cats: updater(prev.cats) }));
   };
 
-  const addCat = (form) => {
+  const addCat = async (form) => {
     const errors = validateCatForm(form);
     if (errors.length) return { ok: false, errors };
 
@@ -638,12 +642,16 @@ function CatHealthApp() {
         nextIds: { ...prev.nextIds, cat: id },
       };
     });
-    if (createdCat) saveCatToCloud(createdCat);
-    setMessage("猫プロフィールを追加しました。");
+    const cloudResult = createdCat ? await saveCatToCloud(createdCat) : { ok: false };
+    if (cloudResult.ok) {
+      setMessage("猫プロフィールを保存しました ✓ Firebaseにも保存済み");
+    } else {
+      setMessage("猫プロフィールを保存しました ✓ 端末には保存しましたが、Firebase保存に失敗しました");
+    }
     return { ok: true };
   };
 
-  const updateCat = (catId, form) => {
+  const updateCat = async (catId, form) => {
     const errors = validateCatForm(form);
     if (errors.length) return { ok: false, errors };
 
@@ -661,8 +669,12 @@ function CatHealthApp() {
       updatedAt: new Date().toISOString(),
     };
     updateCats((cats) => cats.map((cat) => (cat.id === catId ? updated : cat)));
-    saveCatToCloud(updated);
-    setMessage("猫プロフィールを更新しました。");
+    const cloudResult = await saveCatToCloud(updated);
+    if (cloudResult.ok) {
+      setMessage("猫プロフィールを保存しました ✓ Firebaseにも保存済み");
+    } else {
+      setMessage("猫プロフィールを保存しました ✓ 端末には保存しましたが、Firebase保存に失敗しました");
+    }
     return { ok: true };
   };
 
@@ -680,7 +692,7 @@ function CatHealthApp() {
     setMessage("猫プロフィールを削除しました。");
   };
 
-  const saveLog = (catId, draft, editingId) => {
+  const saveLog = async (catId, draft, editingId) => {
     const normalizedDraft = { ...draft, weightKg: formatWeight(draft.weightKg) ?? "" };
     const errors = validateLogForm(normalizedDraft);
     if (errors.length) return { ok: false, errors };
@@ -729,8 +741,12 @@ function CatHealthApp() {
       return { ok: false, errors: ["同じ日付の記録が既にあります。編集から更新してください。"] };
     }
 
-    if (recordForCloud) saveRecordToCloud(recordForCloud, catId);
-    setMessage(editingId ? "日次記録を更新しました。" : "日次記録を追加しました。");
+    const cloudResult = recordForCloud ? await saveRecordToCloud(recordForCloud, catId) : { ok: false };
+    if (cloudResult.ok) {
+      setMessage("今日の記録を保存しました ✓ Firebaseにも保存済み");
+    } else {
+      setMessage("今日の記録を保存しました ✓ 端末には保存しましたが、Firebase保存に失敗しました");
+    }
     return { ok: true };
   };
 
@@ -998,8 +1014,8 @@ function HomeView({
     }
   };
 
-  const submit = () => {
-    const result = editingCatId ? onUpdateCat(editingCatId, form) : onAddCat(form);
+  const submit = async () => {
+    const result = editingCatId ? await onUpdateCat(editingCatId, form) : await onAddCat(form);
     if (!result.ok) {
       setErrors(result.errors);
       return;
@@ -1429,8 +1445,8 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
     setDraft({ ...draft, waterTotal: next });
   };
 
-  const onSubmit = () => {
-    const result = saveLog(cat.id, draft, editingId);
+  const onSubmit = async () => {
+    const result = await saveLog(cat.id, draft, editingId);
     if (!result.ok) {
       setErrors(result.errors);
       return;
