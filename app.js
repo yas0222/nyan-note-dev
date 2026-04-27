@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Home,
@@ -818,6 +818,7 @@ function CatHealthApp() {
             onAddCat={addCat}
             onUpdateCat={updateCat}
             onDeleteCat={deleteCat}
+            onShowMessage={setMessage}
             onDeleteSampleOnly={deleteSampleOnly}
             onResetAllData={resetAllData}
             firebaseStatus={firebaseStatus}
@@ -923,6 +924,7 @@ function HomeView({
   onAddCat,
   onUpdateCat,
   onDeleteCat,
+  onShowMessage,
   onDeleteSampleOnly,
   onResetAllData,
   firebaseStatus,
@@ -935,6 +937,7 @@ function HomeView({
   const [showDevMenu, setShowDevMenu] = useState(false);
   const [editingCatId, setEditingCatId] = useState(null);
   const [errors, setErrors] = useState([]);
+  const editFormRef = useRef(null);
   const [form, setForm] = useState({
     name: "",
     age: "",
@@ -962,6 +965,7 @@ function HomeView({
     setEditingCatId(cat.id);
     setShowAdd(false);
     setErrors([]);
+    onShowMessage("編集フォームを表示しました。");
     setForm({
       name: cat.name,
       age: String(cat.age),
@@ -972,6 +976,16 @@ function HomeView({
       currentWeightKg: cat.currentWeightKg ?? "",
     });
   };
+
+  useEffect(() => {
+    if (!editingCatId || !editFormRef.current) return;
+    const topPadding = 28;
+    const targetTop = editFormRef.current.getBoundingClientRect().top + window.scrollY - topPadding;
+    window.scrollTo({
+      top: Math.max(targetTop, 0),
+      behavior: "smooth",
+    });
+  }, [editingCatId]);
 
   const handlePhotoImageUpload = async (file) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -1068,7 +1082,7 @@ function HomeView({
       })}
 
       {(showAdd || editingCatId) && (
-        <div style={cardStyle}>
+        <div ref={editFormRef} style={cardStyle}>
           <Label>{editingCatId ? "猫プロフィールを編集" : "猫プロフィールを追加"}</Label>
           <FormErrorList errors={errors} />
           <InputRow label="名前">
