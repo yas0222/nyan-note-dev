@@ -187,6 +187,63 @@ function getFirebaseErrorDetails(error) {
   return { code, message };
 }
 
+function generatePublicId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `pub-${crypto.randomUUID()}`;
+  }
+  return `pub-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeNameVisibility(value) {
+  if (value === "public" || value === "anonymous" || value === "private") return value;
+  return "public";
+}
+
+function normalizeProfileVisibility(value) {
+  if (value === "private") return "private";
+  return "public";
+}
+
+function buildPublicRegionLabel(prefecture, city, publicRegionLevel) {
+  const normalizedPrefecture = typeof prefecture === "string" ? prefecture.trim() : "";
+  const normalizedCity = typeof city === "string" ? city.trim() : "";
+  const level = normalizePublicRegionLevel(publicRegionLevel);
+  if (level === "none") return "地域非公開";
+  if (level === "prefecture") return normalizedPrefecture || "地域非公開";
+  return `${normalizedPrefecture}${normalizedCity}` || normalizedPrefecture || "地域非公開";
+}
+
+function isPublicCatEnabled(cat) {
+  const profileVisibility = normalizeProfileVisibility(cat?.profileVisibility || cat?.visibility);
+  return profileVisibility !== "private";
+}
+
+function toPublicCatPayload(cat, ownerUid) {
+  const now = new Date().toISOString();
+  const prefecture = typeof cat.prefecture === "string" ? cat.prefecture.trim() : "";
+  const city = typeof cat.city === "string" ? cat.city.trim() : "";
+  const nameVisibility = normalizeNameVisibility(cat.nameVisibility);
+  const displayName = nameVisibility === "public" ? cat.name : "匿名のねこちゃん";
+  const payload = {
+    publicId: cat.publicId,
+    sourceCatId: String(cat.id),
+    ownerUid,
+    displayName,
+    nameVisibility,
+    age: Number(cat.age),
+    sex: cat.gender ?? cat.sex,
+    coatPattern: cat.coatPattern || "",
+    prefecture,
+    city,
+    publicRegionLevel: normalizePublicRegionLevel(cat.publicRegionLevel),
+    publicRegionLabel: buildPublicRegionLabel(prefecture, city, cat.publicRegionLevel),
+    hasLocalImage: Boolean(cat.photoImage),
+    createdAt: cat.publicCreatedAt || now,
+    updatedAt: now,
+  };
+  return omitUndefinedFields(payload);
+}
+
 function toFirestoreCatPayload(cat, ownerUid) {
   const now = new Date().toISOString();
   const prefecture = typeof cat.prefecture === "string" ? cat.prefecture.trim() : "";
@@ -200,6 +257,9 @@ function toFirestoreCatPayload(cat, ownerUid) {
     city,
     region: buildRegionText(prefecture, city, cat.region),
     publicRegionLevel: normalizePublicRegionLevel(cat.publicRegionLevel),
+    publicId: cat.publicId || "",
+    profileVisibility: normalizeProfileVisibility(cat.profileVisibility),
+    nameVisibility: normalizeNameVisibility(cat.nameVisibility),
     coatPattern: cat.coatPattern || "",
     currentWeightKg: cat.currentWeightKg === "" ? null : Number(cat.currentWeightKg),
     visibility: cat.visibility || "private",
@@ -541,8 +601,12 @@ function normalizeCats(cats) {
       city,
       region: buildRegionText(prefecture, city, typeof cat.region === "string" ? cat.region : ""),
       publicRegionLevel: normalizePublicRegionLevel(cat.publicRegionLevel),
+      publicId: typeof cat.publicId === "string" && cat.publicId ? cat.publicId : generatePublicId(),
+      profileVisibility: normalizeProfileVisibility(cat.profileVisibility),
+      nameVisibility: normalizeNameVisibility(cat.nameVisibility),
       coatPattern: typeof cat.coatPattern === "string" ? cat.coatPattern : "",
       photoImage: typeof cat.photoImage === "string" ? cat.photoImage : "",
+      publicCreatedAt: typeof cat.publicCreatedAt === "string" ? cat.publicCreatedAt : "",
       currentWeightKg: formatWeight(cat.currentWeightKg) ?? "",
     };
   });
@@ -571,6 +635,7 @@ function CatHealthApp() {
     authInitStatus: firestoreGateway.authInitStatus,
     authStatus: "未認証",
     lastCatSaveResult: "未実行",
+    lastPublicCatSaveResult: "未実行",
     lastRecordSaveResult: "未実行",
     lastConnectionTestResult: "未実行",
     authUid: "",
@@ -640,6 +705,7 @@ function CatHealthApp() {
     setFirebaseDebug((prev) => ({
       ...prev,
       lastCatSaveResult: target === "猫プロフィール" ? resultText : prev.lastCatSaveResult,
+      lastPublicCatSaveResult: target === "公開プロフィール" ? resultText : prev.lastPublicCatSaveResult,
       lastRecordSaveResult: target === "日次記録" ? resultText : prev.lastRecordSaveResult,
       lastCatSavedOwnerUid: target === "猫プロフィール" ? ownerUid : prev.lastCatSavedOwnerUid,
       lastRecordSavedOwnerUid: target === "日次記録" ? ownerUid : prev.lastRecordSavedOwnerUid,
@@ -658,11 +724,29 @@ function CatHealthApp() {
         "firestore/not-initialized",
         "Firestore未初期化のため保存をスキップしました",
       );
+      updateFirestoreSaveDebug(
+        "公開プロフィール",
+        false,
+        resolvedOwnerUid,
+        "firestore/not-initialized",
+        "Firestore未初期化のため公開プロフィール保存をスキップしました",
+      );
       return { ok: false };
     }
     try {
       const payload = toFirestoreCatPayload(cat, resolvedOwnerUid);
       await firestoreGateway.db.collection("cats").doc(String(cat.id)).set(payload, { merge: true });
+      if (isPublicCatEnabled(cat)) {
+        const publicPayload = toPublicCatPayload(cat, resolvedOwnerUid);
+        await firestoreGateway.db.collection("publicCats").doc(String(cat.publicId)).set(publicPayload, { merge: true });
+        updateFirestoreSaveDebug("公開プロフィール", true, resolvedOwnerUid);
+      } else if (cat.publicId) {
+        await firestoreGateway.db.collection("publicCats").doc(String(cat.publicId)).delete();
+        updateFirestoreSaveDebug("公開プロフィール", true, resolvedOwnerUid);
+        setFirebaseDebug((prev) => ({ ...prev, lastPublicCatSaveResult: "公開プロフィール: 削除済み" }));
+      } else {
+        setFirebaseDebug((prev) => ({ ...prev, lastPublicCatSaveResult: "公開プロフィール: 未実行" }));
+      }
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("猫プロフィール", true, resolvedOwnerUid);
       return { ok: true };
@@ -671,15 +755,21 @@ function CatHealthApp() {
       console.error("[Firestore] 猫プロフィール保存エラー詳細", e);
       if (e && e.stack) console.error("[Firestore] 猫プロフィール保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
+      updateFirestoreSaveDebug("公開プロフィール", false, resolvedOwnerUid, details.code, details.message);
       updateFirestoreSaveDebug("猫プロフィール", false, resolvedOwnerUid, details.code, details.message);
       return { ok: false };
     }
   };
 
   const deleteCatFromCloud = async (catId) => {
+    const target = data.cats.find((cat) => cat.id === catId);
     if (!firestoreGateway.enabled || !firestoreGateway.db) return;
     try {
       await firestoreGateway.db.collection("cats").doc(String(catId)).delete();
+      if (target?.publicId) {
+        await firestoreGateway.db.collection("publicCats").doc(String(target.publicId)).delete();
+        setFirebaseDebug((prev) => ({ ...prev, lastPublicCatSaveResult: "公開プロフィール: 削除済み" }));
+      }
       setFirebaseStatus("Firebase保存可能");
     } catch (_e) {
       setFirebaseStatus("Firebase保存エラー");
@@ -861,6 +951,10 @@ function CatHealthApp() {
         publicRegionLevel,
         currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
         photoImage: form.photoImage || "",
+        publicId: generatePublicId(),
+        profileVisibility: "public",
+        nameVisibility: "public",
+        publicCreatedAt: new Date().toISOString(),
         source: "user",
         createdAt: new Date().toISOString(),
       };
@@ -898,6 +992,10 @@ function CatHealthApp() {
       city: form.city.trim(),
       region,
       publicRegionLevel,
+      publicId: target?.publicId || generatePublicId(),
+      profileVisibility: normalizeProfileVisibility(target?.profileVisibility),
+      nameVisibility: normalizeNameVisibility(target?.nameVisibility),
+      publicCreatedAt: target?.publicCreatedAt || new Date().toISOString(),
       currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
       updatedAt: new Date().toISOString(),
     };
@@ -1580,6 +1678,7 @@ function HomeView({
               <div style={{ fontSize: 11, color: palette.inkSoft }}>現在保存に使っている ownerUid: {firebaseDebug.activeOwnerUid || "なし"}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>ownerUidの種類: {firebaseDebug.ownerUidType}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の猫プロフィール保存結果: {firebaseDebug.lastCatSaveResult}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の公開プロフィール保存結果: {firebaseDebug.lastPublicCatSaveResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に猫プロフィール保存で使った ownerUid: {firebaseDebug.lastCatSavedOwnerUid}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の日次記録保存結果: {firebaseDebug.lastRecordSaveResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に日次記録保存で使った ownerUid: {firebaseDebug.lastRecordSavedOwnerUid}</div>
