@@ -1164,6 +1164,39 @@ function CatHealthApp() {
     }
   };
 
+  const importBackupFile = async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const isValidBackup =
+        parsed &&
+        parsed.backupFormatVersion === "v1" &&
+        Array.isArray(parsed.cats) &&
+        parsed.logsByCat &&
+        typeof parsed.logsByCat === "object" &&
+        !Array.isArray(parsed.logsByCat) &&
+        parsed.nextIds;
+      if (!isValidBackup) {
+        setMessage("バックアップの読み込みに失敗しました");
+        return;
+      }
+      const confirmed = window.confirm("現在の端末内データをバックアップ内容で置き換えます。よろしいですか？");
+      if (!confirmed) return;
+      const restoredData = {
+        cats: normalizeCats(parsed.cats),
+        logsByCat: normalizeLogsByCat(parsed.logsByCat),
+        nextIds: parsed.nextIds || { cat: 100, log: 500 },
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(restoredData));
+      setData(restoredData);
+      setSelectedCatId(restoredData.cats[0]?.id ?? null);
+      setMessage("バックアップを読み込みました ✓");
+    } catch (_e) {
+      setMessage("バックアップの読み込みに失敗しました");
+    }
+  };
+
   return (
     <div
       style={{
@@ -1216,6 +1249,7 @@ function CatHealthApp() {
             onDeleteSampleOnly={deleteSampleOnly}
             onResetAllData={resetAllData}
             onExportData={exportData}
+            onImportBackupFile={importBackupFile}
             firebaseStatus={firebaseStatus}
             firebaseDebug={firebaseDebug}
             onRunFirestoreConnectionTest={runFirestoreConnectionTest}
@@ -1333,6 +1367,7 @@ function HomeView({
   onDeleteSampleOnly,
   onResetAllData,
   onExportData,
+  onImportBackupFile,
   firebaseStatus,
   firebaseDebug,
   onRunFirestoreConnectionTest,
@@ -1343,6 +1378,7 @@ function HomeView({
   const [showDevMenu, setShowDevMenu] = useState(false);
   const [editingCatId, setEditingCatId] = useState(null);
   const [errors, setErrors] = useState([]);
+  const importFileInputRef = useRef(null);
   const editFormRef = useRef(null);
   const [form, setForm] = useState({
     name: "",
@@ -1677,6 +1713,18 @@ function HomeView({
                 <MiniButton onClick={onDeleteSampleOnly}>サンプルだけ削除</MiniButton>
                 <MiniButton onClick={onResetAllData}>全データをリセット</MiniButton>
                 <MiniButton onClick={onExportData}>データを書き出す</MiniButton>
+                <MiniButton onClick={() => importFileInputRef.current?.click()}>バックアップを読み込む</MiniButton>
+                <input
+                  ref={importFileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    onImportBackupFile(file);
+                    e.target.value = "";
+                  }}
+                />
               </div>
             </div>
 
