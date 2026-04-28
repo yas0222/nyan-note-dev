@@ -16,6 +16,23 @@ import {
 const STORAGE_KEY = "nyan-note-prototype-v1";
 const ANONYMOUS_OWNER_ID_KEY = "nyan-note-anonymous-owner-id-v1";
 const PRIVACY_ACCEPTED_KEY = "nyan-note-privacy-accepted-v1";
+
+function safeLocalStorageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (_e) {
+    return null;
+  }
+}
+
+function safeLocalStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
 const PREFECTURES = [
   "北海道",
   "青森県",
@@ -82,15 +99,11 @@ function createAnonymousOwnerId() {
 }
 
 function getOrCreateAnonymousOwnerId() {
-  try {
-    const existing = localStorage.getItem(ANONYMOUS_OWNER_ID_KEY);
-    if (existing) return existing;
-    const created = createAnonymousOwnerId();
-    localStorage.setItem(ANONYMOUS_OWNER_ID_KEY, created);
-    return created;
-  } catch (_e) {
-    return "anon-local-fallback";
-  }
+  const existing = safeLocalStorageGet(ANONYMOUS_OWNER_ID_KEY);
+  if (existing) return existing;
+  const created = createAnonymousOwnerId();
+  safeLocalStorageSet(ANONYMOUS_OWNER_ID_KEY, created);
+  return created;
 }
 
 function hasFirebaseConfig(config) {
@@ -625,12 +638,9 @@ function hydrateLogDraft(log) {
 
 function CatHealthApp() {
   const [hasAcceptedPrivacyNotice, setHasAcceptedPrivacyNotice] = useState(() => {
-    try {
-      return localStorage.getItem(PRIVACY_ACCEPTED_KEY) === "true";
-    } catch (_e) {
-      return false;
-    }
+    return safeLocalStorageGet(PRIVACY_ACCEPTED_KEY) === "true";
   });
+  const [privacyNoticeError, setPrivacyNoticeError] = useState("");
   const [localOwnerUid] = useState(() => getOrCreateAnonymousOwnerId());
   const [authOwnerUid, setAuthOwnerUid] = useState("");
   const [firestoreGateway] = useState(() => createFirestoreGateway());
@@ -879,7 +889,11 @@ function CatHealthApp() {
   };
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (_e) {
+      setMessage("端末保存に失敗しました。ブラウザ設定をご確認ください。");
+    }
   }, [data]);
 
   useEffect(() => {
@@ -1293,11 +1307,11 @@ function CatHealthApp() {
       <BottomNav tab={tab} setTab={setTab} />
       {!hasAcceptedPrivacyNotice && (
         <PrivacyNoticeOverlay
+          errorMessage={privacyNoticeError}
           onAccept={() => {
-            try {
-              localStorage.setItem(PRIVACY_ACCEPTED_KEY, "true");
-            } catch (_e) {
-              // localStorageが使えない環境ではメモリ上のみで進行
+            const saved = safeLocalStorageSet(PRIVACY_ACCEPTED_KEY, "true");
+            if (!saved) {
+              setPrivacyNoticeError("同意状態を端末に保存できませんでした。このまま利用は可能です。");
             }
             setHasAcceptedPrivacyNotice(true);
           }}
@@ -1307,7 +1321,7 @@ function CatHealthApp() {
   );
 }
 
-function PrivacyNoticeOverlay({ onAccept }) {
+function PrivacyNoticeOverlay({ onAccept, errorMessage }) {
   const [checked, setChecked] = useState(false);
   return (
     <div
@@ -1343,6 +1357,11 @@ function PrivacyNoticeOverlay({ onAccept }) {
         <a href="./privacy.html" style={{ display: "inline-block", marginTop: 10, color: palette.accent, fontSize: 12, textDecoration: "underline", fontWeight: 700 }}>
           プライバシーポリシーを見る
         </a>
+        {errorMessage && (
+          <div style={{ marginTop: 10, fontSize: 12, color: "#B00020", lineHeight: 1.6 }}>
+            {errorMessage}
+          </div>
+        )}
         <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 12, fontSize: 12, color: palette.ink }}>
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} style={{ marginTop: 2 }} />
           <span>内容を確認しました</span>
