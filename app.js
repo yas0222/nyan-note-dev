@@ -1708,6 +1708,39 @@ function HomeView({
         </button>
       )}
 
+      <div style={{ ...cardStyle, padding: "12px 14px" }}>
+        <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.05em", marginBottom: 4 }}>
+          プライバシー・利用上の注意
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 16, display: "grid", gap: 4 }}>
+          <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+            日次記録、メモ、写真データは「みんな」画面には公開されません。
+          </li>
+          <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+            「みんな」画面に表示されるのは公開プロフィールのみです。
+          </li>
+          <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+            地域非公開を選ぶと、都道府県・市区町村は公開されません。
+          </li>
+          <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+            本名、住所、電話番号などの個人情報は入力しないでください。
+          </li>
+        </ul>
+        <a
+          href="./privacy.html"
+          style={{
+            display: "inline-block",
+            marginTop: 8,
+            fontSize: 12,
+            color: palette.accent,
+            textDecoration: "underline",
+            fontWeight: 700,
+          }}
+        >
+          プライバシーポリシーを見る
+        </a>
+      </div>
+
       <div style={devMenuCardStyle}>
         <button type="button" onClick={() => setShowDevMenu((prev) => !prev)} style={devMenuToggleStyle}>
           開発用メニュー {showDevMenu ? "▲" : "▼"}
