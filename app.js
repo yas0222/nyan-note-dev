@@ -167,6 +167,11 @@ function buildRegionText(prefecture, city, fallbackRegion = "") {
   return typeof fallbackRegion === "string" ? fallbackRegion.trim() : "";
 }
 
+function normalizePublicRegionLevel(level) {
+  if (level === "none" || level === "prefecture" || level === "city") return level;
+  return "prefecture";
+}
+
 function inferCityFromRegion(region, prefecture) {
   if (typeof region !== "string" || typeof prefecture !== "string") return "";
   const normalizedRegion = region.trim();
@@ -184,14 +189,17 @@ function getFirebaseErrorDetails(error) {
 
 function toFirestoreCatPayload(cat, ownerUid) {
   const now = new Date().toISOString();
+  const prefecture = typeof cat.prefecture === "string" ? cat.prefecture.trim() : "";
+  const city = typeof cat.city === "string" ? cat.city.trim() : "";
   const payload = {
     ownerUid,
     name: cat.name,
     age: Number(cat.age),
     sex: cat.gender ?? cat.sex,
-    prefecture: cat.prefecture || "",
-    city: cat.city || "",
-    region: cat.region,
+    prefecture,
+    city,
+    region: buildRegionText(prefecture, city, cat.region),
+    publicRegionLevel: normalizePublicRegionLevel(cat.publicRegionLevel),
     coatPattern: cat.coatPattern || "",
     currentWeightKg: cat.currentWeightKg === "" ? null : Number(cat.currentWeightKg),
     visibility: cat.visibility || "private",
@@ -236,6 +244,7 @@ const sampleCats = [
     prefecture: "千葉県",
     city: "浦安市",
     region: "千葉県浦安市",
+    publicRegionLevel: "city",
     currentWeightKg: 4.2,
     source: "sample",
   },
@@ -250,6 +259,7 @@ const sampleCats = [
     prefecture: "千葉県",
     city: "浦安市",
     region: "千葉県浦安市",
+    publicRegionLevel: "city",
     currentWeightKg: 5.1,
     source: "sample",
   },
@@ -530,6 +540,7 @@ function normalizeCats(cats) {
       prefecture,
       city,
       region: buildRegionText(prefecture, city, typeof cat.region === "string" ? cat.region : ""),
+      publicRegionLevel: normalizePublicRegionLevel(cat.publicRegionLevel),
       coatPattern: typeof cat.coatPattern === "string" ? cat.coatPattern : "",
       photoImage: typeof cat.photoImage === "string" ? cat.photoImage : "",
       currentWeightKg: formatWeight(cat.currentWeightKg) ?? "",
@@ -833,6 +844,7 @@ function CatHealthApp() {
     if (errors.length) return { ok: false, errors };
 
     const region = buildRegionText(form.prefecture, form.city, form.legacyRegion);
+    const publicRegionLevel = normalizePublicRegionLevel(form.publicRegionLevel);
     let createdCat = null;
     setData((prev) => {
       const id = prev.nextIds.cat + 1;
@@ -846,6 +858,7 @@ function CatHealthApp() {
         prefecture: form.prefecture.trim(),
         city: form.city.trim(),
         region,
+        publicRegionLevel,
         currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
         photoImage: form.photoImage || "",
         source: "user",
@@ -872,6 +885,7 @@ function CatHealthApp() {
 
     const region = buildRegionText(form.prefecture, form.city, form.legacyRegion);
     const target = data.cats.find((cat) => cat.id === catId);
+    const publicRegionLevel = normalizePublicRegionLevel(form.publicRegionLevel);
     const updated = {
       ...target,
       name: form.name.trim(),
@@ -883,6 +897,7 @@ function CatHealthApp() {
       prefecture: form.prefecture.trim(),
       city: form.city.trim(),
       region,
+      publicRegionLevel,
       currentWeightKg: formatWeight(form.currentWeightKg) ?? "",
       updatedAt: new Date().toISOString(),
     };
@@ -1219,6 +1234,7 @@ function HomeView({
     photoImage: "",
     prefecture: "",
     city: "",
+    publicRegionLevel: "prefecture",
     legacyRegion: "",
     currentWeightKg: "",
   });
@@ -1234,6 +1250,7 @@ function HomeView({
       photoImage: "",
       prefecture: "",
       city: "",
+      publicRegionLevel: "prefecture",
       legacyRegion: "",
       currentWeightKg: "",
     });
@@ -1258,6 +1275,7 @@ function HomeView({
       photoImage: cat.photoImage || "",
       prefecture: inferredPrefecture,
       city: inferredCity,
+      publicRegionLevel: normalizePublicRegionLevel(cat.publicRegionLevel),
       legacyRegion: typeof cat.region === "string" ? cat.region : "",
       currentWeightKg: cat.currentWeightKg ?? "",
     });
@@ -1467,6 +1485,18 @@ function HomeView({
                 既存データの地域: {form.legacyRegion}
               </div>
             ) : null}
+          </InputRow>
+          <InputRow label="地域の公開範囲">
+            <select
+              value={form.publicRegionLevel}
+              onChange={(e) => setForm({ ...form, publicRegionLevel: e.target.value })}
+              style={inputStyle}
+            >
+              <option value="none">非公開</option>
+              <option value="prefecture">都道府県まで</option>
+              <option value="city">市区町村まで</option>
+            </select>
+            <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 6 }}>みんな機能・統計で使います</div>
           </InputRow>
           <InputRow label="現在の体重(kg)">
             <input
