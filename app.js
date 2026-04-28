@@ -230,6 +230,7 @@ function toPublicCatPayload(cat, ownerUid) {
   const publicRegionLevel = normalizePublicRegionLevel(cat.publicRegionLevel);
   const prefecture = publicRegionLevel === "none" ? "" : rawPrefecture;
   const city = publicRegionLevel === "city" ? rawCity : "";
+  const publicRegionLabel = buildPublicRegionLabel(prefecture, city, publicRegionLevel);
   const nameVisibility = normalizeNameVisibility(cat.nameVisibility);
   const displayName = nameVisibility === "public" ? cat.name : "匿名のねこちゃん";
   const payload = {
@@ -244,7 +245,7 @@ function toPublicCatPayload(cat, ownerUid) {
     prefecture,
     city,
     publicRegionLevel,
-    publicRegionLabel: buildPublicRegionLabel(prefecture, city, publicRegionLevel),
+    publicRegionLabel,
     hasLocalImage: Boolean(cat.photoImage),
     createdAt: cat.publicCreatedAt || now,
     updatedAt: now,
@@ -2244,7 +2245,12 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
   const [selectedPrefecture, setSelectedPrefecture] = useState("すべて");
   const filteredPublicCats = useMemo(() => {
     if (selectedPrefecture === "すべて") return publicCats;
-    return publicCats.filter((cat) => cat.publicRegionLevel !== "none" && cat.prefecture === selectedPrefecture);
+    return publicCats.filter(
+      (cat) =>
+        cat.publicRegionLevel !== "none" &&
+        cat.publicRegionLabel !== "地域非公開" &&
+        cat.prefecture === selectedPrefecture,
+    );
   }, [publicCats, selectedPrefecture]);
 
   useEffect(() => {
@@ -2295,7 +2301,12 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
         const filteredItems =
           selectedPrefecture === "すべて"
             ? items
-            : items.filter((cat) => cat.publicRegionLevel !== "none" && cat.prefecture === selectedPrefecture);
+            : items.filter(
+                (cat) =>
+                  cat.publicRegionLevel !== "none" &&
+                  cat.publicRegionLabel !== "地域非公開" &&
+                  cat.prefecture === selectedPrefecture,
+              );
         setLoadState(filteredItems.length === 0 ? "empty" : "loaded");
         onUpdatePublicCatsLoadDebug(items.length === 0 ? "0件" : "読み込み成功", "", "", conditionText);
       } catch (e) {
