@@ -17,7 +17,7 @@ const STORAGE_KEY = "nyan-note-prototype-v1";
 const ANONYMOUS_OWNER_ID_KEY = "nyan-note-anonymous-owner-id-v1";
 
 const FIREBASE_CONFIG = {
-  apiKey: "ここに取得した値",
+  apiKey: "AIzaSyD5YPd4OFIZZzsASOD8Rvv-kNP9hw-2O7o",
   authDomain: "neko222-ym.firebaseapp.com",
   projectId: "neko222-ym",
   storageBucket: "neko222-ym.firebasestorage.app",
