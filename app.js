@@ -1277,7 +1277,9 @@ function CatHealthApp() {
             onUpdatePublicCatsLoadDebug={updatePublicCatsLoadDebug}
           />
         )}
-        {tab === "stats" && <StatsView />}
+        {tab === "stats" && (
+          <StatsView firestoreGateway={firestoreGateway} authOwnerUid={authOwnerUid} authStatus={firebaseDebug.authStatus} />
+        )}
       </main>
 
       <BottomNav tab={tab} setTab={setTab} />
@@ -2487,67 +2489,167 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
   );
 }
 
-function StatsView() {
-  const [scope, setScope] = useState("全国");
-  const scopes = ["千葉県", "関東", "全国"];
+function StatsView({ firestoreGateway, authOwnerUid, authStatus }) {
+  const [publicCats, setPublicCats] = useState([]);
+  const [loadState, setLoadState] = useState("idle");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const data =
-    scope === "全国"
-      ? { count: 12483, avgFood: 68, avgPoop: 1.4, avgPee: 3.1, popularRatio: { kibble: 65, wet: 35 } }
-      : scope === "関東"
-      ? { count: 4218, avgFood: 70, avgPoop: 1.3, avgPee: 3.2, popularRatio: { kibble: 68, wet: 32 } }
-      : { count: 612, avgFood: 72, avgPoop: 1.5, avgPee: 3.0, popularRatio: { kibble: 62, wet: 38 } };
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPublicCats = async () => {
+      const currentAuthUid = firestoreGateway?.auth?.currentUser?.uid || authOwnerUid || "";
+      const isAuthChecking = Boolean(firestoreGateway?.enabled && firestoreGateway?.auth) && !currentAuthUid && authStatus !== "認証エラー";
+      if (isAuthChecking) {
+        if (cancelled) return;
+        setLoadState("auth-checking");
+        setIsLoading(false);
+        return;
+      }
+      try {
+        if (!currentAuthUid) {
+          throw { code: "auth/not-ready", message: "匿名認証が完了していません" };
+        }
+        if (!firestoreGateway?.enabled || !firestoreGateway?.db) {
+          throw { code: "firestore/not-initialized", message: "Firestoreが初期化されていません" };
+        }
+        if (cancelled) return;
+        setLoadState("loading");
+        setIsLoading(true);
+        const snap = await firestoreGateway.db.collection("publicCats").orderBy("updatedAt", "desc").limit(300).get();
+        if (cancelled) return;
+        const items = snap.docs.map((doc) => {
+          const data = doc.data() || {};
+          return {
+            age: Number.isFinite(Number(data.age)) ? Number(data.age) : null,
+            sex: typeof data.sex === "string" ? data.sex.trim() : "",
+            coatPattern: typeof data.coatPattern === "string" ? data.coatPattern.trim() : "",
+            prefecture: typeof data.prefecture === "string" ? data.prefecture.trim() : "",
+            publicRegionLevel: normalizePublicRegionLevel(data.publicRegionLevel),
+          };
+        });
+        if (cancelled) return;
+        setPublicCats(items);
+        setLoadState(items.length === 0 ? "empty" : "loaded");
+      } catch (e) {
+        if (cancelled) return;
+        console.error("[Firestore] publicCats 統計読み込み失敗", e);
+        setPublicCats([]);
+        setLoadState("error");
+      } finally {
+        if (cancelled) return;
+        setIsLoading(false);
+      }
+    };
+
+    loadPublicCats();
+    return () => {
+      cancelled = true;
+    };
+  }, [authOwnerUid, authStatus, firestoreGateway]);
+
+  const stats = useMemo(() => {
+    const totalCount = publicCats.length;
+    const prefectureCount = {};
+    const ageCount = { "0-2歳": 0, "3-6歳": 0, "7-10歳": 0, "11歳以上": 0, "不明": 0 };
+    const sexCount = {};
+    const coatPatternCount = {};
+
+    publicCats.forEach((cat) => {
+      if (cat.publicRegionLevel !== "none" && cat.prefecture) {
+        prefectureCount[cat.prefecture] = (prefectureCount[cat.prefecture] || 0) + 1;
+      }
+
+      if (!Number.isFinite(cat.age) || cat.age < 0) {
+        ageCount["不明"] += 1;
+      } else if (cat.age <= 2) {
+        ageCount["0-2歳"] += 1;
+      } else if (cat.age <= 6) {
+        ageCount["3-6歳"] += 1;
+      } else if (cat.age <= 10) {
+        ageCount["7-10歳"] += 1;
+      } else {
+        ageCount["11歳以上"] += 1;
+      }
+
+      const sexLabel = cat.sex || "不明";
+      sexCount[sexLabel] = (sexCount[sexLabel] || 0) + 1;
+
+      const patternLabel = cat.coatPattern || "不明";
+      coatPatternCount[patternLabel] = (coatPatternCount[patternLabel] || 0) + 1;
+    });
+
+    const toSortedRows = (counts) =>
+      Object.entries(counts)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1]);
+
+    return {
+      totalCount,
+      prefectureRows: toSortedRows(prefectureCount),
+      ageRows: toSortedRows(ageCount),
+      sexRows: toSortedRows(sexCount),
+      coatPatternRows: toSortedRows(coatPatternCount),
+    };
+  }, [publicCats]);
+
+  const hasStats = stats.totalCount > 0;
 
   return (
     <div>
-      <SectionLabel left="統計" right="🌏" />
+      <SectionLabel left="統計" right={hasStats ? `${stats.totalCount}匹` : "🌏"} />
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {scopes.map((s) => (
-          <Pill key={s} active={scope === s} onClick={() => setScope(s)}>
-            {s}
-          </Pill>
-        ))}
-      </div>
+      {loadState === "auth-checking" && <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>認証確認中…</div>}
+      {loadState === "loading" && isLoading && <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>読み込み中…</div>}
+      {loadState === "error" && <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>統計の読み込みに失敗しました</div>}
 
-      <div style={{ ...cardStyle, padding: "20px", textAlign: "center" }}>
-        <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.2em" }}>登録されている猫</div>
-        <div style={{ fontFamily: fontDisplay, fontSize: 44, fontWeight: 700, color: palette.accent, lineHeight: 1.1 }}>
-          {data.count.toLocaleString()}
-          <span style={{ fontSize: 18, color: palette.ink, marginLeft: 4 }}>匹</span>
+      {(loadState === "empty" || (loadState === "loaded" && !hasStats)) && (
+        <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>公開されている猫ちゃんが増えると統計が表示されます</div>
+      )}
+
+      {loadState === "loaded" && hasStats && (
+        <>
+          <div style={{ ...cardStyle, padding: "20px", textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.2em" }}>公開猫ちゃん数</div>
+            <div style={{ fontFamily: fontDisplay, fontSize: 44, fontWeight: 700, color: palette.accent, lineHeight: 1.1 }}>
+              {stats.totalCount.toLocaleString()}
+              <span style={{ fontSize: 18, color: palette.ink, marginLeft: 4 }}>匹</span>
+            </div>
+          </div>
+
+          <StatsBarCard title="都道府県別の公開猫ちゃん数" rows={stats.prefectureRows} emptyText="地域公開の猫ちゃんがまだいません" />
+          <StatsBarCard title="年齢分布" rows={stats.ageRows} emptyText="年齢データがまだありません" />
+          <StatsBarCard title="性別分布" rows={stats.sexRows} emptyText="性別データがまだありません" />
+          <StatsBarCard title="毛柄分布" rows={stats.coatPatternRows} emptyText="毛柄データがまだありません" />
+        </>
+      )}
+    </div>
+  );
+}
+
+function StatsBarCard({ title, rows, emptyText }) {
+  const max = rows.reduce((acc, [, count]) => (count > acc ? count : acc), 0);
+  return (
+    <div style={cardStyle}>
+      <Label>{title}</Label>
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 12, color: palette.inkSoft }}>{emptyText}</div>
+      ) : (
+        <div style={{ display: "grid", gap: 8 }}>
+          {rows.map(([label, count]) => {
+            const width = max > 0 ? Math.max((count / max) * 100, 8) : 0;
+            return (
+              <div key={`${title}-${label}`} style={{ display: "grid", gridTemplateColumns: "88px 1fr auto", gap: 8, alignItems: "center" }}>
+                <div style={{ fontSize: 12, color: palette.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+                <div style={{ height: 10, borderRadius: 999, background: "#EFE7DF", overflow: "hidden" }}>
+                  <div style={{ width: `${width}%`, height: "100%", borderRadius: 999, background: palette.accent }} />
+                </div>
+                <div style={{ fontSize: 12, color: palette.inkSoft, minWidth: 26, textAlign: "right" }}>{count}</div>
+              </div>
+            );
+          })}
         </div>
-        <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 4 }}>{scope}</div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <StatCard label="平均ごはん" value={`${data.avgFood}g`} hint="1日あたり" />
-        <StatCard label="平均うんち" value={`${data.avgPoop}回`} hint="1日あたり" />
-        <StatCard label="平均おしっこ" value={`${data.avgPee}回`} hint="1日あたり" />
-        <StatCard label="多い比率" value={`${data.popularRatio.kibble}:${data.popularRatio.wet}`} hint="カリカリ:ウェット" />
-      </div>
-
-      <div style={cardStyle}>
-        <Label>みんなのごはん比率</Label>
-        <RatioBar kibble={data.popularRatio.kibble} wet={data.popularRatio.wet} />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            fontSize: 11,
-            color: palette.inkSoft,
-            marginTop: 6,
-          }}
-        >
-          <span>カリカリ {data.popularRatio.kibble}%</span>
-          <span>ウェット {data.popularRatio.wet}%</span>
-        </div>
-      </div>
-
-      <div style={{ ...cardStyle, background: palette.cream, borderStyle: "dashed" }}>
-        <div style={{ fontSize: 12, color: palette.inkSoft, lineHeight: 1.7 }}>
-          💡 <b style={{ color: palette.ink }}>もなかちゃん</b>のごはんは{scope}平均より少し多めです。おやつの頻度は平均的でバランスがいいですね。
-        </div>
-      </div>
+      )}
     </div>
   );
 }
