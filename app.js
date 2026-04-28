@@ -299,6 +299,47 @@ function buildInitialData() {
   };
 }
 
+
+
+function CalendarPawIcon({ color = palette.leaf }) {
+  const toeStyle = {
+    position: "absolute",
+    width: 3,
+    height: 3.8,
+    borderRadius: "50%",
+    background: color,
+    opacity: 0.82,
+  };
+
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "relative",
+        display: "inline-block",
+        width: 12,
+        height: 9,
+      }}
+    >
+      <span style={{ ...toeStyle, left: 0.6, top: 0.4, transform: "rotate(-16deg)" }} />
+      <span style={{ ...toeStyle, left: 3.6, top: -0.1 }} />
+      <span style={{ ...toeStyle, right: 3.4, top: -0.1 }} />
+      <span style={{ ...toeStyle, right: 0.4, top: 0.4, transform: "rotate(16deg)" }} />
+      <span
+        style={{
+          position: "absolute",
+          left: 2.1,
+          bottom: 0,
+          width: 7.6,
+          height: 4.8,
+          borderRadius: "56% 56% 62% 62%",
+          background: color,
+          opacity: 0.9,
+        }}
+      />
+    </span>
+  );
+}
 function newLogDraft(date = todayKey()) {
   return {
     date,
@@ -1765,7 +1806,9 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
                 }}
               >
                 <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 500 }}>{Number(dateKey.slice(-2))}</span>
-                <span style={{ fontSize: 10, lineHeight: 1, color: hasLog ? palette.leaf : "transparent" }}>{hasLog ? "✓" : "・"}</span>
+                <span style={{ minHeight: 10, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                  {hasLog ? <CalendarPawIcon color={palette.leaf} /> : null}
+                </span>
               </button>
             );
           })}
