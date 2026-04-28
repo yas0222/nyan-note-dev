@@ -2239,6 +2239,10 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
   const [loadState, setLoadState] = useState("idle");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedPrefecture, setSelectedPrefecture] = useState("すべて");
+  const filteredPublicCats = useMemo(() => {
+    if (selectedPrefecture === "すべて") return publicCats;
+    return publicCats.filter((cat) => cat.prefecture === selectedPrefecture);
+  }, [publicCats, selectedPrefecture]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2264,17 +2268,10 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
         if (cancelled) return;
         setLoadState("loading");
         setIsLoading(true);
-        let query = firestoreGateway.db
+        const query = firestoreGateway.db
           .collection("publicCats")
           .orderBy("updatedAt", "desc")
-          .limit(50);
-        if (selectedPrefecture !== "すべて") {
-          query = firestoreGateway.db
-            .collection("publicCats")
-            .where("prefecture", "==", selectedPrefecture)
-            .orderBy("updatedAt", "desc")
-            .limit(50);
-        }
+          .limit(100);
         const snap = await query.get();
         if (cancelled) return;
         const items = snap.docs.map((doc) => {
@@ -2284,12 +2281,14 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
             age: Number.isFinite(Number(data.age)) ? Number(data.age) : null,
             sex: typeof data.sex === "string" ? data.sex : "",
             coatPattern: typeof data.coatPattern === "string" ? data.coatPattern : "",
+            prefecture: typeof data.prefecture === "string" ? data.prefecture.trim() : "",
             publicRegionLabel: typeof data.publicRegionLabel === "string" ? data.publicRegionLabel : "地域非公開",
           };
         });
         if (cancelled) return;
         setPublicCats(items);
-        setLoadState(items.length === 0 ? "empty" : "loaded");
+        const filteredItems = selectedPrefecture === "すべて" ? items : items.filter((cat) => cat.prefecture === selectedPrefecture);
+        setLoadState(filteredItems.length === 0 ? "empty" : "loaded");
         onUpdatePublicCatsLoadDebug(items.length === 0 ? "0件" : "読み込み成功", "", "", conditionText);
       } catch (e) {
         if (cancelled) return;
@@ -2312,7 +2311,7 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
 
   return (
     <div>
-      <SectionLabel left="みんなの猫ちゃん" right={loadState === "loaded" || loadState === "empty" ? `${publicCats.length}匹` : "🌏"} />
+      <SectionLabel left="みんなの猫ちゃん" right={loadState === "loaded" || loadState === "empty" ? `${filteredPublicCats.length}匹` : "🌏"} />
 
       <div style={{ ...cardStyle, padding: "12px 14px" }}>
         <div style={{ fontSize: 12, color: palette.ink, marginBottom: 6 }}>都道府県で絞り込み</div>
@@ -2347,7 +2346,7 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
       )}
 
       {loadState === "loaded" &&
-        publicCats.map((cat, i) => (
+        filteredPublicCats.map((cat, i) => (
           <div
             key={`${cat.displayName}-${i}`}
             style={{
