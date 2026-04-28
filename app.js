@@ -1651,6 +1651,11 @@ function HomeView({
               <option value="city">市区町村まで</option>
             </select>
             <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 6 }}>みんな機能・統計で使います</div>
+            <div style={{ fontSize: 11, color: palette.inkSoft, marginTop: 4, lineHeight: 1.5 }}>
+              公開プロフィールは「みんな」画面に表示されます。日次記録・メモ・写真データは公開されません。
+              <br />
+              地域を非公開にすると都道府県・市区町村は表示されず、名前を非公開にすると「匿名のねこちゃん」と表示されます。
+            </div>
           </InputRow>
           <InputRow label="現在の体重(kg)">
             <input
