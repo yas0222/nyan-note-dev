@@ -105,8 +105,11 @@ python3 -m http.server 8000
   - Firebase app 初期化成功 / 失敗
   - Firestore 初期化成功 / 失敗
   - 認証状態（未認証 / 匿名ログイン中 / 匿名ログイン済み / 認証エラー）
+  - Firebase Auth uid / localStorage fallback ownerId / 現在保存に使っている ownerUid / ownerUid の種類（Firebase Auth または localStorage fallback）
   - 最後の猫プロフィール保存結果
+  - 最後に猫プロフィール保存で使った ownerUid
   - 最後の日次記録保存結果
+  - 最後に日次記録保存で使った ownerUid
   - 最後の Firebase エラーコード / メッセージ
   - Firestore 接続テスト結果
 - ホーム画面下部では、開発向け項目は初期状態で「開発用メニュー ▼」として折りたたまれています。必要なときだけタップして展開し、「データ管理」や「Firebase診断」を確認できます。
@@ -114,13 +117,16 @@ python3 -m http.server 8000
 ### Firebase診断の使い方
 
 1. ホーム画面の下部「Firebase診断」カードを開きます。
-2. `Firestore接続テスト` ボタンを押すと、Firestore の `debug` コレクションへテストドキュメントを書き込みます（`Firebase app 初期化成功` と `Firestore 初期化成功` の表示を先に確認）。
-3. 保存内容は軽量データのみです。
+2. ownerUid 関連の確認では、`Firebase Auth uid` が取得できている場合に `現在保存に使っている ownerUid` が同じ値になることを確認してください（匿名認証 uid を常に優先利用）。
+3. Firebase Auth が使えない場合のみ、`ownerUidの種類` が `localStorage fallback` になり、既存の fallback ownerId が利用されます。
+4. Firestore セキュリティルール設定前に、猫プロフィール保存 / 日次記録保存を実行し、`最後に〜保存で使った ownerUid` が期待通りか必ず確認してください。
+5. `Firestore接続テスト` ボタンを押すと、Firestore の `debug` コレクションへテストドキュメントを書き込みます（`Firebase app 初期化成功` と `Firestore 初期化成功` の表示を先に確認）。
+6. 保存内容は軽量データのみです。
    - `ownerUid`
    - `createdAt`
    - `message: "firestore test"`
-4. 成功時は画面に `Firestore接続テスト成功` と表示され、失敗時はエラーコードとエラーメッセージが表示されます。
-5. 同時に `console.log` / `console.error` に詳細を出力するため、ブラウザ開発者ツールでも原因追跡できます。
+7. 成功時は画面に `Firestore接続テスト成功` と表示され、失敗時はエラーコードとエラーメッセージが表示されます。
+8. 同時に `console.log` / `console.error` に詳細を出力するため、ブラウザ開発者ツールでも原因追跡できます。
 
 ### GitHub Pages での Firebase SDK 読み込み構成
 

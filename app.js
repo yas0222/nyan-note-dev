@@ -471,10 +471,33 @@ function CatHealthApp() {
     lastCatSaveResult: "未実行",
     lastRecordSaveResult: "未実行",
     lastConnectionTestResult: "未実行",
+    authUid: "",
+    fallbackOwnerId: localOwnerUid,
+    activeOwnerUid: localOwnerUid,
+    ownerUidType: "localStorage fallback",
+    lastCatSavedOwnerUid: "未実行",
+    lastRecordSavedOwnerUid: "未実行",
     lastErrorCode: firestoreGateway.initErrorCode || "",
     lastErrorMessage: firestoreGateway.initErrorMessage || "",
   }));
-  const ownerUid = authOwnerUid || localOwnerUid;
+  const ownerResolution = useMemo(() => {
+    const authUidFromCurrentUser = firestoreGateway.auth?.currentUser?.uid || "";
+    const authUid = authUidFromCurrentUser || authOwnerUid || "";
+    if (authUid) {
+      return {
+        authUid,
+        fallbackOwnerId: localOwnerUid,
+        activeOwnerUid: authUid,
+        ownerUidType: "Firebase Auth",
+      };
+    }
+    return {
+      authUid: "",
+      fallbackOwnerId: localOwnerUid,
+      activeOwnerUid: localOwnerUid,
+      ownerUidType: "localStorage fallback",
+    };
+  }, [authOwnerUid, firestoreGateway.auth, localOwnerUid]);
   const [tab, setTab] = useState("home");
   const [data, setData] = useState(() => {
     try {
@@ -494,7 +517,17 @@ function CatHealthApp() {
   const [selectedCatId, setSelectedCatId] = useState(() => data.cats[0]?.id ?? null);
   const [message, setMessage] = useState("");
 
-  const updateFirestoreSaveDebug = (target, ok, errorCode = "", errorMessage = "") => {
+  useEffect(() => {
+    setFirebaseDebug((prev) => ({
+      ...prev,
+      authUid: ownerResolution.authUid,
+      fallbackOwnerId: ownerResolution.fallbackOwnerId,
+      activeOwnerUid: ownerResolution.activeOwnerUid,
+      ownerUidType: ownerResolution.ownerUidType,
+    }));
+  }, [ownerResolution]);
+
+  const updateFirestoreSaveDebug = (target, ok, ownerUid, errorCode = "", errorMessage = "") => {
     const resultText = ok ? `${target}: 保存成功` : `${target}: 保存失敗`;
     const errorText = ok ? "" : errorMessage || "不明なFirestoreエラー";
     if (ok) {
@@ -506,28 +539,37 @@ function CatHealthApp() {
       ...prev,
       lastCatSaveResult: target === "猫プロフィール" ? resultText : prev.lastCatSaveResult,
       lastRecordSaveResult: target === "日次記録" ? resultText : prev.lastRecordSaveResult,
+      lastCatSavedOwnerUid: target === "猫プロフィール" ? ownerUid : prev.lastCatSavedOwnerUid,
+      lastRecordSavedOwnerUid: target === "日次記録" ? ownerUid : prev.lastRecordSavedOwnerUid,
       lastErrorCode: ok ? "" : errorCode,
       lastErrorMessage: errorText,
     }));
   };
 
   const saveCatToCloud = async (cat) => {
+    const resolvedOwnerUid = ownerResolution.activeOwnerUid;
     if (!firestoreGateway.enabled || !firestoreGateway.db) {
-      updateFirestoreSaveDebug("猫プロフィール", false, "firestore/not-initialized", "Firestore未初期化のため保存をスキップしました");
+      updateFirestoreSaveDebug(
+        "猫プロフィール",
+        false,
+        resolvedOwnerUid,
+        "firestore/not-initialized",
+        "Firestore未初期化のため保存をスキップしました",
+      );
       return { ok: false };
     }
     try {
-      const payload = toFirestoreCatPayload(cat, ownerUid);
+      const payload = toFirestoreCatPayload(cat, resolvedOwnerUid);
       await firestoreGateway.db.collection("cats").doc(String(cat.id)).set(payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
-      updateFirestoreSaveDebug("猫プロフィール", true);
+      updateFirestoreSaveDebug("猫プロフィール", true, resolvedOwnerUid);
       return { ok: true };
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
       console.error("[Firestore] 猫プロフィール保存エラー詳細", e);
       if (e && e.stack) console.error("[Firestore] 猫プロフィール保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
-      updateFirestoreSaveDebug("猫プロフィール", false, details.code, details.message);
+      updateFirestoreSaveDebug("猫プロフィール", false, resolvedOwnerUid, details.code, details.message);
       return { ok: false };
     }
   };
@@ -543,22 +585,29 @@ function CatHealthApp() {
   };
 
   const saveRecordToCloud = async (record, catId) => {
+    const resolvedOwnerUid = ownerResolution.activeOwnerUid;
     if (!firestoreGateway.enabled || !firestoreGateway.db) {
-      updateFirestoreSaveDebug("日次記録", false, "firestore/not-initialized", "Firestore未初期化のため保存をスキップしました");
+      updateFirestoreSaveDebug(
+        "日次記録",
+        false,
+        resolvedOwnerUid,
+        "firestore/not-initialized",
+        "Firestore未初期化のため保存をスキップしました",
+      );
       return { ok: false };
     }
     try {
-      const payload = toFirestoreRecordPayload(record, catId, ownerUid);
+      const payload = toFirestoreRecordPayload(record, catId, resolvedOwnerUid);
       await firestoreGateway.db.collection("records").doc(String(record.id)).set(payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
-      updateFirestoreSaveDebug("日次記録", true);
+      updateFirestoreSaveDebug("日次記録", true, resolvedOwnerUid);
       return { ok: true };
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
       console.error("[Firestore] 日次記録保存エラー詳細", e);
       if (e && e.stack) console.error("[Firestore] 日次記録保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
-      updateFirestoreSaveDebug("日次記録", false, details.code, details.message);
+      updateFirestoreSaveDebug("日次記録", false, resolvedOwnerUid, details.code, details.message);
       return { ok: false };
     }
   };
@@ -579,7 +628,7 @@ function CatHealthApp() {
     }
     try {
       const payload = omitUndefinedFields({
-        ownerUid,
+        ownerUid: ownerResolution.activeOwnerUid,
         createdAt: new Date().toISOString(),
         message: "firestore test",
       });
@@ -1332,8 +1381,16 @@ function HomeView({
               <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore: {firebaseDebug.firestoreInitStatus}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>Firebase Auth: {firebaseDebug.authInitStatus}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>認証状態: {firebaseDebug.authStatus}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>Firebase Auth uid: {firebaseDebug.authUid || "なし"}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>
+                localStorage fallback ownerId: {firebaseDebug.fallbackOwnerId || "なし"}
+              </div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>現在保存に使っている ownerUid: {firebaseDebug.activeOwnerUid || "なし"}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>ownerUidの種類: {firebaseDebug.ownerUidType}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の猫プロフィール保存結果: {firebaseDebug.lastCatSaveResult}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に猫プロフィール保存で使った ownerUid: {firebaseDebug.lastCatSavedOwnerUid}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の日次記録保存結果: {firebaseDebug.lastRecordSaveResult}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に日次記録保存で使った ownerUid: {firebaseDebug.lastRecordSavedOwnerUid}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore接続テスト: {firebaseDebug.lastConnectionTestResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後のFirebaseエラーコード: {firebaseDebug.lastErrorCode || "なし"}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>
