@@ -1757,6 +1757,19 @@ function HomeView({
                   大切な記録は、バックアップを書き出して保存できます。
                 </li>
               </ul>
+              <a
+                href="./privacy.html"
+                style={{
+                  display: "inline-block",
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: palette.accent,
+                  textDecoration: "underline",
+                  fontWeight: 700,
+                }}
+              >
+                プライバシーポリシーを見る
+              </a>
             </div>
 
             <div style={{ ...cardStyle, padding: "12px 14px", marginTop: -4 }}>
