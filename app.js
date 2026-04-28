@@ -1734,6 +1734,30 @@ function HomeView({
             </div>
 
             <div style={{ ...cardStyle, padding: "12px 14px", marginTop: -4 }}>
+              <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.05em", marginBottom: 4 }}>プライバシーについて</div>
+              <ul style={{ margin: 0, paddingLeft: 16, display: "grid", gap: 4 }}>
+                <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+                  猫プロフィール・日次記録・メモは、健康記録のために保存されます。
+                </li>
+                <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+                  日次記録・メモ・写真データは「みんな」画面に公開されません。
+                </li>
+                <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+                  「みんな」画面に表示されるのは公開プロフィールのみです。
+                </li>
+                <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+                  地域非公開を選ぶと、都道府県・市区町村は公開されません。
+                </li>
+                <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+                  本名・住所・電話番号などの個人情報は入力しないでください。
+                </li>
+                <li style={{ fontSize: 12, color: palette.ink, lineHeight: 1.5 }}>
+                  大切な記録は、バックアップを書き出して保存できます。
+                </li>
+              </ul>
+            </div>
+
+            <div style={{ ...cardStyle, padding: "12px 14px", marginTop: -4 }}>
               <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.05em", marginBottom: 4 }}>Firebase診断</div>
               <div style={{ fontSize: 12, color: palette.ink }}>
                 Firebase接続状態:{" "}
