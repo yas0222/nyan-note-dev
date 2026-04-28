@@ -634,6 +634,7 @@ function CatHealthApp() {
     lastCatSaveResult: "未実行",
     lastPublicCatSaveResult: "未実行",
     lastPublicCatsLoadResult: "未実行",
+    lastPublicCatsLoadCondition: "未実行",
     lastRecordSaveResult: "未実行",
     lastConnectionTestResult: "未実行",
     authUid: "",
@@ -712,10 +713,11 @@ function CatHealthApp() {
     }));
   };
 
-  const updatePublicCatsLoadDebug = useCallback((resultText, errorCode = "", errorMessage = "") => {
+  const updatePublicCatsLoadDebug = useCallback((resultText, errorCode = "", errorMessage = "", conditionText = "") => {
     setFirebaseDebug((prev) => ({
       ...prev,
       lastPublicCatsLoadResult: resultText,
+      lastPublicCatsLoadCondition: conditionText || prev.lastPublicCatsLoadCondition,
       lastErrorCode: errorCode,
       lastErrorMessage: errorMessage,
     }));
@@ -1694,6 +1696,9 @@ function HomeView({
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の猫プロフィール保存結果: {firebaseDebug.lastCatSaveResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の公開プロフィール保存結果: {firebaseDebug.lastPublicCatSaveResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の publicCats 読み込み結果: {firebaseDebug.lastPublicCatsLoadResult}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>
+                最後の公開プロフィール読み込み条件: {firebaseDebug.lastPublicCatsLoadCondition}
+              </div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に猫プロフィール保存で使った ownerUid: {firebaseDebug.lastCatSavedOwnerUid}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の日次記録保存結果: {firebaseDebug.lastRecordSaveResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に日次記録保存で使った ownerUid: {firebaseDebug.lastRecordSavedOwnerUid}</div>
@@ -2233,18 +2238,20 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
   const [publicCats, setPublicCats] = useState([]);
   const [loadState, setLoadState] = useState("idle");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedPrefecture, setSelectedPrefecture] = useState("すべて");
 
   useEffect(() => {
     let cancelled = false;
 
     const loadPublicCats = async () => {
+      const conditionText = selectedPrefecture === "すべて" ? "すべて" : selectedPrefecture;
       const currentAuthUid = firestoreGateway?.auth?.currentUser?.uid || authOwnerUid || "";
       const isAuthChecking = Boolean(firestoreGateway?.enabled && firestoreGateway?.auth) && !currentAuthUid && authStatus !== "認証エラー";
       if (isAuthChecking) {
         if (cancelled) return;
         setLoadState("auth-checking");
         setIsLoading(false);
-        onUpdatePublicCatsLoadDebug("認証確認中");
+        onUpdatePublicCatsLoadDebug("認証確認中", "", "", conditionText);
         return;
       }
       try {
@@ -2257,11 +2264,18 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
         if (cancelled) return;
         setLoadState("loading");
         setIsLoading(true);
-        const snap = await firestoreGateway.db
+        let query = firestoreGateway.db
           .collection("publicCats")
           .orderBy("updatedAt", "desc")
-          .limit(50)
-          .get();
+          .limit(50);
+        if (selectedPrefecture !== "すべて") {
+          query = firestoreGateway.db
+            .collection("publicCats")
+            .where("prefecture", "==", selectedPrefecture)
+            .orderBy("updatedAt", "desc")
+            .limit(50);
+        }
+        const snap = await query.get();
         if (cancelled) return;
         const items = snap.docs.map((doc) => {
           const data = doc.data() || {};
@@ -2276,14 +2290,14 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
         if (cancelled) return;
         setPublicCats(items);
         setLoadState(items.length === 0 ? "empty" : "loaded");
-        onUpdatePublicCatsLoadDebug(items.length === 0 ? "0件" : "読み込み成功");
+        onUpdatePublicCatsLoadDebug(items.length === 0 ? "0件" : "読み込み成功", "", "", conditionText);
       } catch (e) {
         if (cancelled) return;
         console.error("[Firestore] publicCats 読み込み失敗", e);
         const details = getFirebaseErrorDetails(e);
         setPublicCats([]);
         setLoadState("error");
-        onUpdatePublicCatsLoadDebug("読み込み失敗", details.code, details.message);
+        onUpdatePublicCatsLoadDebug("読み込み失敗", details.code, details.message, conditionText);
       } finally {
         if (cancelled) return;
         setIsLoading(false);
@@ -2294,11 +2308,23 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
     return () => {
       cancelled = true;
     };
-  }, [authOwnerUid, authStatus, firestoreGateway, onUpdatePublicCatsLoadDebug]);
+  }, [authOwnerUid, authStatus, firestoreGateway, onUpdatePublicCatsLoadDebug, selectedPrefecture]);
 
   return (
     <div>
-      <SectionLabel left="みんなの猫ちゃん" right={loadState === "loaded" ? `${publicCats.length}匹` : "🌏"} />
+      <SectionLabel left="みんなの猫ちゃん" right={loadState === "loaded" || loadState === "empty" ? `${publicCats.length}匹` : "🌏"} />
+
+      <div style={{ ...cardStyle, padding: "12px 14px" }}>
+        <div style={{ fontSize: 12, color: palette.ink, marginBottom: 6 }}>都道府県で絞り込み</div>
+        <select value={selectedPrefecture} onChange={(e) => setSelectedPrefecture(e.target.value)} style={inputStyle}>
+          <option value="すべて">すべて</option>
+          {PREFECTURES.map((prefecture) => (
+            <option key={prefecture} value={prefecture}>
+              {prefecture}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {loadState === "auth-checking" && (
         <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>認証確認中…</div>
@@ -2313,7 +2339,11 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
       )}
 
       {loadState === "empty" && (
-        <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>公開されている猫ちゃんはまだいません</div>
+        <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>
+          {selectedPrefecture === "すべて"
+            ? "公開されている猫ちゃんはまだいません"
+            : "この地域で公開されている猫ちゃんはまだいません"}
+        </div>
       )}
 
       {loadState === "loaded" &&
