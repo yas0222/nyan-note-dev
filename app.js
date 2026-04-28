@@ -917,6 +917,33 @@ function CatHealthApp() {
     setMessage("全データを初期化しました。");
   };
 
+  const exportData = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : data;
+      const payload = {
+        appName: "にゃん・ノート",
+        backupFormatVersion: "v1",
+        exportedAt: new Date().toISOString(),
+        cats: normalizeCats(parsed?.cats),
+        logsByCat: normalizeLogsByCat(parsed?.logsByCat),
+        nextIds: parsed?.nextIds || { cat: 100, log: 500 },
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `nyan-note-backup-${toLocalDateKey(new Date())}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setMessage("データを書き出しました ✓");
+    } catch (_e) {
+      setMessage("データの書き出しに失敗しました");
+    }
+  };
+
   return (
     <div
       style={{
@@ -968,6 +995,7 @@ function CatHealthApp() {
             onShowMessage={setMessage}
             onDeleteSampleOnly={deleteSampleOnly}
             onResetAllData={resetAllData}
+            onExportData={exportData}
             firebaseStatus={firebaseStatus}
             firebaseDebug={firebaseDebug}
             onRunFirestoreConnectionTest={runFirestoreConnectionTest}
@@ -1077,6 +1105,7 @@ function HomeView({
   onShowMessage,
   onDeleteSampleOnly,
   onResetAllData,
+  onExportData,
   firebaseStatus,
   firebaseDebug,
   onRunFirestoreConnectionTest,
@@ -1374,6 +1403,7 @@ function HomeView({
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <MiniButton onClick={onDeleteSampleOnly}>サンプルだけ削除</MiniButton>
                 <MiniButton onClick={onResetAllData}>全データをリセット</MiniButton>
+                <MiniButton onClick={onExportData}>データを書き出す</MiniButton>
               </div>
             </div>
 
