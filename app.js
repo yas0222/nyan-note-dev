@@ -374,14 +374,6 @@ const sampleLogsByCat = {
   ],
 };
 
-const communityCats = [
-  { id: 101, name: "ミケ", anonymous: false, region: "東京都世田谷区", age: 5, food: 60, snack: "少なめ", poop: 1, pee: 3, photo: "🐈" },
-  { id: 102, name: null, anonymous: true, region: "大阪府大阪市", age: 2, food: 80, snack: "ふつう", poop: 2, pee: 4, photo: "🐱" },
-  { id: 103, name: "クロ", anonymous: false, region: "北海道札幌市", age: 9, food: 55, snack: "なし", poop: 1, pee: 2, photo: "🐈‍⬛" },
-  { id: 104, name: "ココ", anonymous: false, region: "千葉県市川市", age: 4, food: 70, snack: "ふつう", poop: 2, pee: 3, photo: "🐱" },
-  { id: 105, name: null, anonymous: true, region: "福岡県福岡市", age: 11, food: 50, snack: "少なめ", poop: 1, pee: 2, photo: "🐈" },
-];
-
 const palette = {
   paper: "#F5EFE0",
   paperDeep: "#EDE4CD",
@@ -636,6 +628,7 @@ function CatHealthApp() {
     authStatus: "未認証",
     lastCatSaveResult: "未実行",
     lastPublicCatSaveResult: "未実行",
+    lastPublicCatsLoadResult: "未実行",
     lastRecordSaveResult: "未実行",
     lastConnectionTestResult: "未実行",
     authUid: "",
@@ -711,6 +704,13 @@ function CatHealthApp() {
       lastRecordSavedOwnerUid: target === "日次記録" ? ownerUid : prev.lastRecordSavedOwnerUid,
       lastErrorCode: ok ? "" : errorCode,
       lastErrorMessage: errorText,
+    }));
+  };
+
+  const updatePublicCatsLoadDebug = (resultText) => {
+    setFirebaseDebug((prev) => ({
+      ...prev,
+      lastPublicCatsLoadResult: resultText,
     }));
   };
 
@@ -1222,7 +1222,13 @@ function CatHealthApp() {
           />
         )}
         {tab === "log" && !selectedCat && <EmptyCatPrompt onMoveLog={() => setTab("home")} />}
-        {tab === "community" && <CommunityView />}
+        {tab === "community" && (
+          <CommunityView
+            firestoreGateway={firestoreGateway}
+            authOwnerUid={authOwnerUid}
+            onUpdatePublicCatsLoadDebug={updatePublicCatsLoadDebug}
+          />
+        )}
         {tab === "stats" && <StatsView />}
       </main>
 
@@ -1679,6 +1685,7 @@ function HomeView({
               <div style={{ fontSize: 11, color: palette.inkSoft }}>ownerUidの種類: {firebaseDebug.ownerUidType}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の猫プロフィール保存結果: {firebaseDebug.lastCatSaveResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の公開プロフィール保存結果: {firebaseDebug.lastPublicCatSaveResult}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の publicCats 読み込み結果: {firebaseDebug.lastPublicCatsLoadResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に猫プロフィール保存で使った ownerUid: {firebaseDebug.lastCatSavedOwnerUid}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の日次記録保存結果: {firebaseDebug.lastRecordSaveResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に日次記録保存で使った ownerUid: {firebaseDebug.lastRecordSavedOwnerUid}</div>
@@ -2214,70 +2221,118 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
   );
 }
 
-function CommunityView() {
-  const [filter, setFilter] = useState("全国");
-  const filters = ["全国", "近く", "千葉県"];
+function CommunityView({ firestoreGateway, authOwnerUid, onUpdatePublicCatsLoadDebug }) {
+  const [publicCats, setPublicCats] = useState([]);
+  const [loadState, setLoadState] = useState("idle");
 
-  const filtered = useMemo(() => {
-    if (filter === "近く" || filter === "千葉県") return communityCats.filter((c) => c.region.includes("千葉"));
-    return communityCats;
-  }, [filter]);
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPublicCats = async () => {
+      const currentAuthUid = firestoreGateway?.auth?.currentUser?.uid || authOwnerUid || "";
+      if (!currentAuthUid) {
+        setLoadState("loading");
+        return;
+      }
+      if (!firestoreGateway?.enabled || !firestoreGateway?.db) {
+        setLoadState("error");
+        onUpdatePublicCatsLoadDebug("読み込み失敗");
+        return;
+      }
+
+      setLoadState("loading");
+      try {
+        const snap = await firestoreGateway.db
+          .collection("publicCats")
+          .orderBy("updatedAt", "desc")
+          .limit(50)
+          .get();
+        if (cancelled) return;
+        const items = snap.docs.map((doc) => {
+          const data = doc.data() || {};
+          return {
+            displayName: typeof data.displayName === "string" && data.displayName.trim() ? data.displayName.trim() : "名前未設定",
+            age: Number.isFinite(Number(data.age)) ? Number(data.age) : null,
+            sex: typeof data.sex === "string" ? data.sex : "",
+            coatPattern: typeof data.coatPattern === "string" ? data.coatPattern : "",
+            publicRegionLabel: typeof data.publicRegionLabel === "string" ? data.publicRegionLabel : "地域非公開",
+          };
+        });
+        setPublicCats(items);
+        setLoadState("loaded");
+        onUpdatePublicCatsLoadDebug("読み込み成功");
+      } catch (e) {
+        if (cancelled) return;
+        console.error("[Firestore] publicCats 読み込み失敗", e);
+        setLoadState("error");
+        onUpdatePublicCatsLoadDebug("読み込み失敗");
+      }
+    };
+
+    loadPublicCats();
+    return () => {
+      cancelled = true;
+    };
+  }, [authOwnerUid, firestoreGateway, onUpdatePublicCatsLoadDebug]);
 
   return (
     <div>
-      <SectionLabel left="ほかの猫ちゃん" right={`${filtered.length}匹`} />
+      <SectionLabel left="みんなの猫ちゃん" right={loadState === "loaded" ? `${publicCats.length}匹` : "🌏"} />
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {filters.map((f) => (
-          <Pill key={f} active={filter === f} onClick={() => setFilter(f)}>
-            {f}
-          </Pill>
-        ))}
-      </div>
+      {loadState === "loading" && (
+        <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>読み込み中…</div>
+      )}
 
-      {filtered.map((cat, i) => (
-        <div
-          key={cat.id}
-          style={{
-            ...cardStyle,
-            display: "flex",
-            gap: 14,
-            transform: i % 3 === 0 ? "rotate(-0.3deg)" : i % 3 === 1 ? "rotate(0.3deg)" : "none",
-          }}
-        >
+      {loadState === "error" && (
+        <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>公開プロフィールの読み込みに失敗しました</div>
+      )}
+
+      {loadState === "loaded" && publicCats.length === 0 && (
+        <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>公開されている猫ちゃんはまだいません</div>
+      )}
+
+      {loadState === "loaded" &&
+        publicCats.map((cat, i) => (
           <div
+            key={`${cat.displayName}-${i}`}
             style={{
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              background: palette.cream,
-              border: `1px solid ${palette.line}`,
+              ...cardStyle,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 30,
-              flexShrink: 0,
+              gap: 14,
+              transform: i % 3 === 0 ? "rotate(-0.3deg)" : i % 3 === 1 ? "rotate(0.3deg)" : "none",
+              marginBottom: 12,
             }}
           >
-            {cat.photo}
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: palette.cream,
+                border: `1px solid ${palette.line}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 30,
+                flexShrink: 0,
+              }}
+            >
+              🐱
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontFamily: fontDisplay, fontSize: 16, fontWeight: 700 }}>{cat.displayName}</span>
+              </div>
+              <div style={{ fontSize: 11, color: palette.inkSoft, marginBottom: 8 }}>
+                {cat.publicRegionLabel} · {cat.age == null ? "年齢不明" : `${cat.age}歳`}
+              </div>
+              <div style={{ display: "flex", gap: 10, fontSize: 11, color: palette.ink, flexWrap: "wrap" }}>
+                <Tag>性別 {cat.sex || "未設定"}</Tag>
+                <Tag>毛色・柄 {cat.coatPattern || "未設定"}</Tag>
+              </div>
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontFamily: fontDisplay, fontSize: 16, fontWeight: 700 }}>{cat.anonymous ? "ひみつの猫さん" : cat.name}</span>
-              {cat.anonymous && <EyeOff size={12} color={palette.inkSoft} />}
-            </div>
-            <div style={{ fontSize: 11, color: palette.inkSoft, marginBottom: 8 }}>
-              {cat.region} · {cat.age}歳
-            </div>
-            <div style={{ display: "flex", gap: 10, fontSize: 11, color: palette.ink, flexWrap: "wrap" }}>
-              <Tag>ごはん量 {cat.food}g</Tag>
-              <Tag>おやつ量 {cat.snack}</Tag>
-              <Tag>うんち回数 {cat.poop}回</Tag>
-              <Tag>おしっこ回数 {cat.pee}回</Tag>
-            </div>
-          </div>
-        </div>
-      ))}
+        ))}
     </div>
   );
 }

@@ -120,6 +120,7 @@ python3 -m http.server 8000
 
 - Firestore 保存の土台を追加しました。猫プロフィール（`cats`）と日次記録（`records`）を Firestore に保存できる構造です。
 - 将来の「みんな」機能に向けて、公開プロフィールは `publicCats` コレクションに分離して保存する方針です。`cats` / `records` は本人用データとして扱い、公開してよい最小限の項目のみ `publicCats` に保存します。
+- 「みんな」画面は `publicCats` コレクションのみを匿名ログイン後に読み込み、公開プロフィール一覧を表示します。`cats` / `records` コレクションの読み込みや公開は行いません。
 - ただし `localStorage` 保存を常に優先し、Firestore 保存に失敗してもアプリが壊れない実装にしています。
 - Firebase 未設定時は自動でローカル運用（`localStorage` のみ）になります。
 - Firebase Authentication の匿名ログインを実装しています。アプリ起動時に匿名ログインを試行し、成功時は `auth.currentUser.uid` を `ownerUid` として利用します。
