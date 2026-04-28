@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Home,
@@ -183,7 +183,12 @@ function inferCityFromRegion(region, prefecture) {
 
 function getFirebaseErrorDetails(error) {
   const code = error && typeof error.code === "string" ? error.code : "";
-  const message = error instanceof Error ? error.message : "不明なFirebaseエラー";
+  const message =
+    error instanceof Error
+      ? error.message
+      : error && typeof error.message === "string" && error.message.trim() !== ""
+        ? error.message
+        : "不明なFirebaseエラー";
   return { code, message };
 }
 
@@ -707,14 +712,14 @@ function CatHealthApp() {
     }));
   };
 
-  const updatePublicCatsLoadDebug = (resultText, errorCode = "", errorMessage = "") => {
+  const updatePublicCatsLoadDebug = useCallback((resultText, errorCode = "", errorMessage = "") => {
     setFirebaseDebug((prev) => ({
       ...prev,
       lastPublicCatsLoadResult: resultText,
       lastErrorCode: errorCode,
       lastErrorMessage: errorMessage,
     }));
-  };
+  }, []);
 
   const saveCatToCloud = async (cat) => {
     const resolvedOwnerUid = ownerResolution.activeOwnerUid;
@@ -2235,29 +2240,23 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
     const loadPublicCats = async () => {
       const currentAuthUid = firestoreGateway?.auth?.currentUser?.uid || authOwnerUid || "";
       const isAuthChecking = Boolean(firestoreGateway?.enabled && firestoreGateway?.auth) && !currentAuthUid && authStatus !== "認証エラー";
-
       if (isAuthChecking) {
+        if (cancelled) return;
         setLoadState("auth-checking");
         setIsLoading(false);
         onUpdatePublicCatsLoadDebug("認証確認中");
         return;
       }
-      if (!currentAuthUid) {
-        setLoadState("error");
-        setIsLoading(false);
-        onUpdatePublicCatsLoadDebug("読み込み失敗", "auth/not-ready", "匿名認証が完了していません");
-        return;
-      }
-      if (!firestoreGateway?.enabled || !firestoreGateway?.db) {
-        setLoadState("error");
-        setIsLoading(false);
-        onUpdatePublicCatsLoadDebug("読み込み失敗", "firestore/not-initialized", "Firestoreが初期化されていません");
-        return;
-      }
-
-      setLoadState("loading");
-      setIsLoading(true);
       try {
+        if (!currentAuthUid) {
+          throw { code: "auth/not-ready", message: "匿名認証が完了していません" };
+        }
+        if (!firestoreGateway?.enabled || !firestoreGateway?.db) {
+          throw { code: "firestore/not-initialized", message: "Firestoreが初期化されていません" };
+        }
+        if (cancelled) return;
+        setLoadState("loading");
+        setIsLoading(true);
         const snap = await firestoreGateway.db
           .collection("publicCats")
           .orderBy("updatedAt", "desc")
