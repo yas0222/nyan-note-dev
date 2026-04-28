@@ -142,6 +142,7 @@ function toFirestoreRecordPayload(record, catId, ownerUid) {
     poopCount: Number(record.poop),
     peeCount: Number(record.pee),
     weightKg: record.weightKg === "" ? null : Number(record.weightKg),
+    memo: typeof record.memo === "string" ? record.memo : "",
     visibility: record.isPrivate ? "private" : "public",
     createdAt: record.createdAt || now,
     updatedAt: now,
@@ -351,6 +352,7 @@ function newLogDraft(date = todayKey()) {
     poop: 0,
     pee: 0,
     weightKg: "",
+    memo: "",
     isPrivate: false,
   };
 }
@@ -430,6 +432,7 @@ function normalizeLogsByCat(logsByCat) {
           ...row,
           waterTotal: typeof row.waterTotal === "number" ? row.waterTotal : 0,
           weightKg: formatWeight(row.weightKg) ?? "",
+          memo: typeof row.memo === "string" ? row.memo : "",
         }))
       : [];
   }
@@ -814,7 +817,11 @@ function CatHealthApp() {
   };
 
   const saveLog = async (catId, draft, editingId) => {
-    const normalizedDraft = { ...draft, weightKg: formatWeight(draft.weightKg) ?? "" };
+    const normalizedDraft = {
+      ...draft,
+      weightKg: formatWeight(draft.weightKg) ?? "",
+      memo: typeof draft.memo === "string" ? draft.memo : "",
+    };
     const errors = validateLogForm(normalizedDraft);
     if (errors.length) return { ok: false, errors };
 
@@ -1671,6 +1678,16 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
       </div>
 
       <div style={cardStyle}>
+        <Label>📝 メモ</Label>
+        <textarea
+          value={draft.memo}
+          onChange={(e) => setDraft({ ...draft, memo: e.target.value })}
+          style={{ ...inputStyle, minHeight: 96, resize: "vertical", lineHeight: 1.5 }}
+          placeholder="食いつき・体調・気になったこと"
+        />
+      </div>
+
+      <div style={cardStyle}>
         <button
           onClick={() => setDraft({ ...draft, isPrivate: !draft.isPrivate })}
           style={{
@@ -1732,6 +1749,12 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
           おやつ量 {draft.snack}
           <br />
           うんち回数 {draft.poop}回 / おしっこ回数 {draft.pee}回
+          {draft.memo.trim() ? (
+            <>
+              <br />
+              メモ {draft.memo}
+            </>
+          ) : null}
           <br />
           👀 {draft.isPrivate ? "名前を伏せて共有" : "名前ありで共有"}
         </div>
@@ -1885,6 +1908,9 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
                 <div>うんち回数 {selectedLog.poop}回</div>
                 <div>おしっこ回数 {selectedLog.pee}回</div>
                 {selectedLog.weightKg !== "" && selectedLog.weightKg != null && <div>体重 {Number(selectedLog.weightKg).toFixed(1)}kg</div>}
+                {typeof selectedLog.memo === "string" && selectedLog.memo.trim() !== "" && (
+                  <div style={{ marginTop: 4, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{selectedLog.memo}</div>
+                )}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <MiniButton onClick={() => startEdit(selectedLog)}>この日を編集</MiniButton>
