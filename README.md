@@ -120,8 +120,9 @@ python3 -m http.server 8000
 
 - Firestore 保存の土台を追加しました。猫プロフィール（`cats`）と日次記録（`records`）を Firestore に保存できる構造です。
 - 将来の「みんな」機能に向けて、公開プロフィールは `publicCats` コレクションに分離して保存する方針です。`cats` / `records` は本人用データとして扱い、公開してよい最小限の項目のみ `publicCats` に保存します。
+- `publicCats` の地域情報は `publicRegionLevel` に応じて保存します。`none`（地域非公開）の場合は `prefecture` / `city` を空文字で保存し、`publicRegionLabel` は `地域非公開` に固定します。`prefecture` の場合は都道府県のみ、`city` の場合は都道府県＋市区町村を保存します。
 - 「みんな」画面は `publicCats` コレクションのみを匿名ログイン後に読み込み、公開プロフィール一覧を表示します。`cats` / `records` コレクションの読み込みや公開は行いません。
-- 「みんな」画面には都道府県フィルター（`すべて` + 47都道府県）を用意し、`publicCats.prefecture` で絞り込みできます（`すべて` は `updatedAt` 降順で最大50件、都道府県指定は `where("prefecture", "==", 都道府県).orderBy("updatedAt", "desc").limit(50)`）。
+- 「みんな」画面には都道府県フィルター（`すべて` + 47都道府県）を用意しています。`すべて` は公開プロフィールを全件表示し、都道府県指定時は `publicRegionLevel !== "none"` かつ `prefecture` 一致の公開プロフィールだけを表示します（地域非公開の猫ちゃんは都道府県指定結果に含めません）。
 - ただし `localStorage` 保存を常に優先し、Firestore 保存に失敗してもアプリが壊れない実装にしています。
 - Firebase 未設定時は自動でローカル運用（`localStorage` のみ）になります。
 - Firebase Authentication の匿名ログインを実装しています。アプリ起動時に匿名ログインを試行し、成功時は `auth.currentUser.uid` を `ownerUid` として利用します。
