@@ -707,10 +707,12 @@ function CatHealthApp() {
     }));
   };
 
-  const updatePublicCatsLoadDebug = (resultText) => {
+  const updatePublicCatsLoadDebug = (resultText, errorCode = "", errorMessage = "") => {
     setFirebaseDebug((prev) => ({
       ...prev,
       lastPublicCatsLoadResult: resultText,
+      lastErrorCode: errorCode,
+      lastErrorMessage: errorMessage,
     }));
   };
 
@@ -1226,6 +1228,7 @@ function CatHealthApp() {
           <CommunityView
             firestoreGateway={firestoreGateway}
             authOwnerUid={authOwnerUid}
+            authStatus={firebaseDebug.authStatus}
             onUpdatePublicCatsLoadDebug={updatePublicCatsLoadDebug}
           />
         )}
@@ -2221,26 +2224,39 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
   );
 }
 
-function CommunityView({ firestoreGateway, authOwnerUid, onUpdatePublicCatsLoadDebug }) {
+function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePublicCatsLoadDebug }) {
   const [publicCats, setPublicCats] = useState([]);
   const [loadState, setLoadState] = useState("idle");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadPublicCats = async () => {
       const currentAuthUid = firestoreGateway?.auth?.currentUser?.uid || authOwnerUid || "";
+      const isAuthChecking = Boolean(firestoreGateway?.enabled && firestoreGateway?.auth) && !currentAuthUid && authStatus !== "認証エラー";
+
+      if (isAuthChecking) {
+        setLoadState("auth-checking");
+        setIsLoading(false);
+        onUpdatePublicCatsLoadDebug("認証確認中");
+        return;
+      }
       if (!currentAuthUid) {
-        setLoadState("loading");
+        setLoadState("error");
+        setIsLoading(false);
+        onUpdatePublicCatsLoadDebug("読み込み失敗", "auth/not-ready", "匿名認証が完了していません");
         return;
       }
       if (!firestoreGateway?.enabled || !firestoreGateway?.db) {
         setLoadState("error");
-        onUpdatePublicCatsLoadDebug("読み込み失敗");
+        setIsLoading(false);
+        onUpdatePublicCatsLoadDebug("読み込み失敗", "firestore/not-initialized", "Firestoreが初期化されていません");
         return;
       }
 
       setLoadState("loading");
+      setIsLoading(true);
       try {
         const snap = await firestoreGateway.db
           .collection("publicCats")
@@ -2258,14 +2274,20 @@ function CommunityView({ firestoreGateway, authOwnerUid, onUpdatePublicCatsLoadD
             publicRegionLabel: typeof data.publicRegionLabel === "string" ? data.publicRegionLabel : "地域非公開",
           };
         });
+        if (cancelled) return;
         setPublicCats(items);
-        setLoadState("loaded");
-        onUpdatePublicCatsLoadDebug("読み込み成功");
+        setLoadState(items.length === 0 ? "empty" : "loaded");
+        onUpdatePublicCatsLoadDebug(items.length === 0 ? "0件" : "読み込み成功");
       } catch (e) {
         if (cancelled) return;
         console.error("[Firestore] publicCats 読み込み失敗", e);
+        const details = getFirebaseErrorDetails(e);
+        setPublicCats([]);
         setLoadState("error");
-        onUpdatePublicCatsLoadDebug("読み込み失敗");
+        onUpdatePublicCatsLoadDebug("読み込み失敗", details.code, details.message);
+      } finally {
+        if (cancelled) return;
+        setIsLoading(false);
       }
     };
 
@@ -2273,13 +2295,17 @@ function CommunityView({ firestoreGateway, authOwnerUid, onUpdatePublicCatsLoadD
     return () => {
       cancelled = true;
     };
-  }, [authOwnerUid, firestoreGateway, onUpdatePublicCatsLoadDebug]);
+  }, [authOwnerUid, authStatus, firestoreGateway, onUpdatePublicCatsLoadDebug]);
 
   return (
     <div>
       <SectionLabel left="みんなの猫ちゃん" right={loadState === "loaded" ? `${publicCats.length}匹` : "🌏"} />
 
-      {loadState === "loading" && (
+      {loadState === "auth-checking" && (
+        <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>認証確認中…</div>
+      )}
+
+      {loadState === "loading" && isLoading && (
         <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>読み込み中…</div>
       )}
 
@@ -2287,7 +2313,7 @@ function CommunityView({ firestoreGateway, authOwnerUid, onUpdatePublicCatsLoadD
         <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>公開プロフィールの読み込みに失敗しました</div>
       )}
 
-      {loadState === "loaded" && publicCats.length === 0 && (
+      {loadState === "empty" && (
         <div style={{ ...cardStyle, fontSize: 12, color: palette.inkSoft }}>公開されている猫ちゃんはまだいません</div>
       )}
 
