@@ -859,7 +859,7 @@ function CatHealthApp() {
     let resolvedOwnerUid = "";
     const collectionName = "records";
     const recordDate = record?.date || todayKey();
-    const recordId = `${resolvedOwnerUid || "pending"}_${String(catId)}_${recordDate}`;
+    const recordId = `record_v2_${resolvedOwnerUid || "pending"}_${String(catId)}_${recordDate}`;
     const operation = "setDoc(merge:true)";
     if (!firestoreGateway.enabled || !firestoreGateway.db) {
       updateFirestoreSaveDebug(
@@ -873,7 +873,7 @@ function CatHealthApp() {
     }
     try {
       resolvedOwnerUid = await ensureAuthenticatedUid();
-      const safeRecordId = `${resolvedOwnerUid}_${String(catId)}_${recordDate}`;
+      const safeRecordId = `record_v2_${resolvedOwnerUid}_${String(catId)}_${recordDate}`;
       const recordRef = firestoreGateway.db.collection(collectionName).doc(safeRecordId);
       const existingSnapshot = await recordRef.get();
       if (existingSnapshot.exists) {
@@ -920,7 +920,7 @@ function CatHealthApp() {
       setFirebaseDebug((prev) => ({
         ...prev,
         lastRecordCollection: collectionName,
-        lastRecordId: `${resolvedOwnerUid || "missing"}_${String(catId)}_${recordDate}`,
+        lastRecordId: `record_v2_${resolvedOwnerUid || "missing"}_${String(catId)}_${recordDate}`,
         lastRecordAuthUid: resolvedOwnerUid || "",
         lastRecordPayloadOwnerUid: resolvedOwnerUid || "",
         lastRecordCatId: String(catId),
@@ -933,7 +933,7 @@ function CatHealthApp() {
         errorCode: details.code,
         errorMessage: details.message,
         collectionName,
-        recordId: `${resolvedOwnerUid || "missing"}_${String(catId)}_${recordDate}`,
+        recordId: `record_v2_${resolvedOwnerUid || "missing"}_${String(catId)}_${recordDate}`,
         operation,
         recordDate,
         catId: String(catId),
