@@ -686,6 +686,13 @@ function CatHealthApp() {
     ownerUidType: "localStorage fallback",
     lastCatSavedOwnerUid: "未実行",
     lastRecordSavedOwnerUid: "未実行",
+    lastRecordCollection: "未実行",
+    lastRecordId: "未実行",
+    lastRecordAuthUid: "未実行",
+    lastRecordPayloadOwnerUid: "未実行",
+    lastRecordCatId: "未実行",
+    lastRecordDate: "未実行",
+    lastRecordWriteMode: "未実行",
     lastErrorCode: firestoreGateway.initErrorCode || "",
     lastErrorMessage: firestoreGateway.initErrorMessage || "",
   }));
@@ -850,6 +857,10 @@ function CatHealthApp() {
 
   const saveRecordToCloud = async (record, catId) => {
     let resolvedOwnerUid = "";
+    const collectionName = "records";
+    const recordDate = record?.date || todayKey();
+    const recordId = `${resolvedOwnerUid || "pending"}_${String(catId)}_${recordDate}`;
+    const operation = "setDoc(merge:true)";
     if (!firestoreGateway.enabled || !firestoreGateway.db) {
       updateFirestoreSaveDebug(
         "日次記録",
@@ -858,11 +869,12 @@ function CatHealthApp() {
         "firestore/not-initialized",
         "Firestore未初期化のため保存をスキップしました",
       );
-      return { ok: false };
+      return { ok: false, collectionName, recordId, operation, recordDate, catId: String(catId), authUid: "", payloadOwnerUid: "" };
     }
     try {
       resolvedOwnerUid = await ensureAuthenticatedUid();
-      const recordRef = firestoreGateway.db.collection("records").doc(String(record.id));
+      const safeRecordId = `${resolvedOwnerUid}_${String(catId)}_${recordDate}`;
+      const recordRef = firestoreGateway.db.collection(collectionName).doc(safeRecordId);
       const existingSnapshot = await recordRef.get();
       if (existingSnapshot.exists) {
         const existingData = existingSnapshot.data() || {};
@@ -875,23 +887,59 @@ function CatHealthApp() {
         }
       }
       const payload = toFirestoreRecordPayload(record, catId, resolvedOwnerUid);
-      if (existingSnapshot.exists) {
-        const existingData = existingSnapshot.data() || {};
-        if (existingData.ownerUid) {
-          payload.ownerUid = existingData.ownerUid;
-        }
-      }
       await recordRef.set(payload, { merge: true });
+      setFirebaseDebug((prev) => ({
+        ...prev,
+        lastRecordCollection: collectionName,
+        lastRecordId: safeRecordId,
+        lastRecordAuthUid: resolvedOwnerUid,
+        lastRecordPayloadOwnerUid: payload.ownerUid || "",
+        lastRecordCatId: String(catId),
+        lastRecordDate: recordDate,
+        lastRecordWriteMode: operation,
+      }));
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("日次記録", true, resolvedOwnerUid);
-      return { ok: true, errorCode: "", errorMessage: "" };
+      return {
+        ok: true,
+        errorCode: "",
+        errorMessage: "",
+        collectionName,
+        recordId: safeRecordId,
+        operation,
+        recordDate,
+        catId: String(catId),
+        authUid: resolvedOwnerUid,
+        payloadOwnerUid: payload.ownerUid || "",
+      };
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
       console.error("[Firestore] 日次記録保存エラー詳細", e);
       if (e && e.stack) console.error("[Firestore] 日次記録保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
+      setFirebaseDebug((prev) => ({
+        ...prev,
+        lastRecordCollection: collectionName,
+        lastRecordId: `${resolvedOwnerUid || "missing"}_${String(catId)}_${recordDate}`,
+        lastRecordAuthUid: resolvedOwnerUid || "",
+        lastRecordPayloadOwnerUid: resolvedOwnerUid || "",
+        lastRecordCatId: String(catId),
+        lastRecordDate: recordDate,
+        lastRecordWriteMode: operation,
+      }));
       updateFirestoreSaveDebug("日次記録", false, resolvedOwnerUid, details.code, details.message);
-      return { ok: false, errorCode: details.code, errorMessage: details.message };
+      return {
+        ok: false,
+        errorCode: details.code,
+        errorMessage: details.message,
+        collectionName,
+        recordId: `${resolvedOwnerUid || "missing"}_${String(catId)}_${recordDate}`,
+        operation,
+        recordDate,
+        catId: String(catId),
+        authUid: resolvedOwnerUid || "",
+        payloadOwnerUid: resolvedOwnerUid || "",
+      };
     }
   };
 
@@ -1178,7 +1226,7 @@ function CatHealthApp() {
       setMessage("今日の記録を保存しました ✓ Firebaseにも保存済み");
     } else {
       setMessage(
-        `今日の記録を保存しました ✓ 端末には保存しましたが、Firebase保存に失敗しました（${cloudResult.errorCode || "unknown"}: ${cloudResult.errorMessage || "不明なエラー"}）`,
+        `今日の記録を保存しました ✓ 端末には保存しましたが、Firebase保存に失敗しました（collection=${cloudResult.collectionName || "records"}, recordId=${cloudResult.recordId || "unknown"}, authUid=${cloudResult.authUid || "none"}, payload.ownerUid=${cloudResult.payloadOwnerUid || "none"}, catId=${cloudResult.catId || "unknown"}, recordDate=${cloudResult.recordDate || "unknown"}, op=${cloudResult.operation || "setDoc"}, code=${cloudResult.errorCode || "unknown"}, message=${cloudResult.errorMessage || "不明なエラー"}）`,
       );
     }
     return { ok: true };
@@ -1951,6 +1999,13 @@ function HomeView({
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に猫プロフィール保存で使った ownerUid: {firebaseDebug.lastCatSavedOwnerUid}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後の日次記録保存結果: {firebaseDebug.lastRecordSaveResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後に日次記録保存で使った ownerUid: {firebaseDebug.lastRecordSavedOwnerUid}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録の保存先コレクション: {firebaseDebug.lastRecordCollection}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録の recordId: {firebaseDebug.lastRecordId}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録保存時 auth.currentUser.uid: {firebaseDebug.lastRecordAuthUid}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録 payload.ownerUid: {firebaseDebug.lastRecordPayloadOwnerUid}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録 catId: {firebaseDebug.lastRecordCatId}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録 recordDate: {firebaseDebug.lastRecordDate}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録の保存方式: {firebaseDebug.lastRecordWriteMode}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>Firestore接続テスト: {firebaseDebug.lastConnectionTestResult}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>最後のFirebaseエラーコード: {firebaseDebug.lastErrorCode || "なし"}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>
@@ -2104,8 +2159,6 @@ function LogView({ cat, logs, saveLog, deleteLog, cats, setSelectedCat, onMoveHo
     }
     setErrors([]);
     setLastSaved({ ...draft, catName: cat.name, catPhoto: cat.photo });
-    setEditingId(null);
-    setDraft(newLogDraft());
   };
 
   const startEdit = (log) => {
