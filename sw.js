@@ -1,4 +1,4 @@
-const CACHE_NAME = "nyan-note-dev-v1";
+const CACHE_NAME = "nyan-note-dev-v2";
 const BASE = "/nyan-note-dev";
 const ASSETS = [
   `${BASE}/`,
@@ -7,6 +7,7 @@ const ASSETS = [
   `${BASE}/manifest.json`,
   `${BASE}/privacy.html`,
   `${BASE}/terms.html`,
+  `${BASE}/rescue.html`,
   `${BASE}/public/icons/cat-icon.svg`,
 ];
 
