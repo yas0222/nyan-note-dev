@@ -1769,7 +1769,7 @@ function HomeView({
         </button>
       )}
 
-      <div style={{ ...cardStyle, padding: "12px 14px" }}>
+      <div style={{ ...cardStyle, padding: "14px 14px 16px" }}>
         <div style={{ fontSize: 11, color: palette.inkSoft, letterSpacing: "0.05em", marginBottom: 4 }}>
           プライバシー・利用上の注意
         </div>
@@ -1787,51 +1787,53 @@ function HomeView({
             本名、住所、電話番号などの個人情報は入力しないでください。
           </li>
         </ul>
-        <a
-          href="./privacy.html"
-          style={{
-            display: "inline-block",
-            marginTop: 8,
-            fontSize: 12,
-            color: palette.accent,
-            textDecoration: "underline",
-            fontWeight: 700,
-          }}
-        >
-          プライバシーポリシーを見る
-        </a>
-        <a
-          href="./terms.html"
-          style={{
-            display: "inline-block",
-            marginTop: 8,
-            marginLeft: 10,
-            fontSize: 12,
-            color: palette.accent,
-            textDecoration: "underline",
-            fontWeight: 700,
-          }}
-        >
-          利用規約を見る
-        </a>
-        <a
-          href="https://forms.gle/xH5jHSFsTLmWsDLw9"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-block",
-            marginTop: 8,
-            marginLeft: 10,
-            fontSize: 12,
-            color: palette.accent,
-            textDecoration: "underline",
-            fontWeight: 700,
-          }}
-        >
-          ご意見・不具合報告はこちら
-        </a>
-        <div style={{ marginTop: 8, fontSize: 11, color: palette.inkSoft, lineHeight: 1.4 }}>
-          現在β版です。表示や機能は予告なく変更される場合があります。
+        <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <a
+              href="./privacy.html"
+              style={{
+                display: "inline-block",
+                fontSize: 11,
+                color: palette.inkSoft,
+                textDecoration: "none",
+                fontWeight: 500,
+                lineHeight: 1.4,
+              }}
+            >
+              プライバシーポリシーを見る
+            </a>
+            <a
+              href="./terms.html"
+              style={{
+                display: "inline-block",
+                fontSize: 11,
+                color: palette.inkSoft,
+                textDecoration: "none",
+                fontWeight: 500,
+                lineHeight: 1.4,
+              }}
+            >
+              利用規約を見る
+            </a>
+          </div>
+          <a
+            href="https://forms.gle/xH5jHSFsTLmWsDLw9"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-block",
+              fontSize: 11,
+              color: palette.inkSoft,
+              textDecoration: "none",
+              fontWeight: 500,
+              lineHeight: 1.4,
+            }}
+          >
+            ご意見・不具合報告はこちら
+          </a>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 10.5, color: "#8C7F72", lineHeight: 1.45 }}>
+          ※現在β版です。表示や機能は予告なく変更される場合があります。
         </div>
       </div>
 
