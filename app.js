@@ -636,6 +636,28 @@ function hydrateLogDraft(log) {
   };
 }
 
+function loadInitialDataSafely() {
+  const fallback = buildInitialData();
+  try {
+    const raw = safeLocalStorageGet(STORAGE_KEY);
+    if (!raw) {
+      return { data: fallback, allowAutoSave: true, loadError: false };
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      data: {
+        cats: normalizeCats(parsed?.cats),
+        logsByCat: normalizeLogsByCat(parsed?.logsByCat),
+        nextIds: parsed?.nextIds || { cat: 100, log: 500 },
+      },
+      allowAutoSave: true,
+      loadError: false,
+    };
+  } catch (_e) {
+    return { data: fallback, allowAutoSave: false, loadError: true };
+  }
+}
+
 function CatHealthApp() {
   const [localOwnerUid] = useState(() => getOrCreateAnonymousOwnerId());
   const [authOwnerUid, setAuthOwnerUid] = useState("");
@@ -683,23 +705,21 @@ function CatHealthApp() {
     };
   }, [authOwnerUid, firestoreGateway.auth, localOwnerUid]);
   const [tab, setTab] = useState("home");
-  const [data, setData] = useState(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return buildInitialData();
-      const parsed = JSON.parse(raw);
-      return {
-        cats: normalizeCats(parsed.cats),
-        logsByCat: normalizeLogsByCat(parsed.logsByCat),
-        nextIds: parsed.nextIds || { cat: 100, log: 500 },
-      };
-    } catch (_e) {
-      return buildInitialData();
-    }
-  });
+  const initialLoadRef = useRef(null);
+  if (!initialLoadRef.current) {
+    initialLoadRef.current = loadInitialDataSafely();
+  }
+  const [data, setData] = useState(initialLoadRef.current.data);
+  const [allowAutoSave] = useState(initialLoadRef.current.allowAutoSave);
 
   const [selectedCatId, setSelectedCatId] = useState(() => data.cats[0]?.id ?? null);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (initialLoadRef.current?.loadError) {
+      setMessage("端末データの読み込みに失敗したため、保存は停止しています。rescue.html でバックアップを書き出してください。");
+    }
+  }, []);
 
   useEffect(() => {
     setFirebaseDebug((prev) => ({
@@ -885,12 +905,13 @@ function CatHealthApp() {
   };
 
   useEffect(() => {
+    if (!allowAutoSave) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      safeLocalStorageSet(STORAGE_KEY, JSON.stringify(data));
     } catch (_e) {
       setMessage("端末保存に失敗しました。ブラウザ設定をご確認ください。");
     }
-  }, [data]);
+  }, [allowAutoSave, data]);
 
   useEffect(() => {
     const runAnonymousAuth = async () => {
@@ -1151,7 +1172,6 @@ function CatHealthApp() {
     const initial = buildInitialData();
     setData(initial);
     setSelectedCatId(initial.cats[0]?.id ?? null);
-    localStorage.removeItem(STORAGE_KEY);
     setMessage("全データを初期化しました。");
   };
 
@@ -3125,5 +3145,40 @@ function RatioBar({ kibble, wet }) {
   );
 }
 
-const root = createRoot(document.getElementById("root"));
-root.render(<CatHealthApp />);
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error("React描画エラー:", error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: "24px", fontFamily: fontBody, color: palette.ink }}>
+          アプリの読み込み中にエラーが発生しました。再読み込みしてください。
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const rootElement = document.getElementById("root");
+if (rootElement) {
+  const root = createRoot(rootElement);
+  root.render(
+    <AppErrorBoundary>
+      <CatHealthApp />
+    </AppErrorBoundary>,
+  );
+} else {
+  document.body.innerHTML = `<div style="padding:24px;font-family:sans-serif">アプリの読み込み中にエラーが発生しました。再読み込みしてください。</div>`;
+}
