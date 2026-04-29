@@ -299,7 +299,9 @@ function toFirestoreRecordPayload(record, catId, ownerUid) {
   const payload = {
     ownerUid,
     catId: String(catId),
+    recordDate: record.date,
     date: record.date,
+    foodAmount: Number(record.foodTotal),
     foodGram: Number(record.foodTotal),
     dryRatio: Number(record.kibblePct),
     wetRatio: Number(record.wetPct),
@@ -860,18 +862,36 @@ function CatHealthApp() {
     }
     try {
       resolvedOwnerUid = await ensureAuthenticatedUid();
+      const recordRef = firestoreGateway.db.collection("records").doc(String(record.id));
+      const existingSnapshot = await recordRef.get();
+      if (existingSnapshot.exists) {
+        const existingData = existingSnapshot.data() || {};
+        const existingOwnerUid = typeof existingData.ownerUid === "string" ? existingData.ownerUid : "";
+        if (existingOwnerUid && existingOwnerUid !== resolvedOwnerUid) {
+          throw {
+            code: "records/owner-mismatch",
+            message: "既存の日次記録 ownerUid が現在の認証ユーザーと一致しないため更新できません",
+          };
+        }
+      }
       const payload = toFirestoreRecordPayload(record, catId, resolvedOwnerUid);
-      await firestoreGateway.db.collection("records").doc(String(record.id)).set(payload, { merge: true });
+      if (existingSnapshot.exists) {
+        const existingData = existingSnapshot.data() || {};
+        if (existingData.ownerUid) {
+          payload.ownerUid = existingData.ownerUid;
+        }
+      }
+      await recordRef.set(payload, { merge: true });
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("日次記録", true, resolvedOwnerUid);
-      return { ok: true };
+      return { ok: true, errorCode: "", errorMessage: "" };
     } catch (e) {
       setFirebaseStatus("Firebase保存エラー");
       console.error("[Firestore] 日次記録保存エラー詳細", e);
       if (e && e.stack) console.error("[Firestore] 日次記録保存エラースタック", e.stack);
       const details = getFirebaseErrorDetails(e);
       updateFirestoreSaveDebug("日次記録", false, resolvedOwnerUid, details.code, details.message);
-      return { ok: false };
+      return { ok: false, errorCode: details.code, errorMessage: details.message };
     }
   };
 
@@ -1151,11 +1171,15 @@ function CatHealthApp() {
       return { ok: false, errors: ["同じ日付の記録が既にあります。編集から更新してください。"] };
     }
 
-    const cloudResult = recordForCloud ? await saveRecordToCloud(recordForCloud, catId) : { ok: false };
+    const cloudResult = recordForCloud
+      ? await saveRecordToCloud(recordForCloud, catId)
+      : { ok: false, errorCode: "records/not-created", errorMessage: "日次記録データを作成できませんでした" };
     if (cloudResult.ok) {
       setMessage("今日の記録を保存しました ✓ Firebaseにも保存済み");
     } else {
-      setMessage("今日の記録を保存しました ✓ 端末には保存しましたが、Firebase保存に失敗しました");
+      setMessage(
+        `今日の記録を保存しました ✓ 端末には保存しましたが、Firebase保存に失敗しました（${cloudResult.errorCode || "unknown"}: ${cloudResult.errorMessage || "不明なエラー"}）`,
+      );
     }
     return { ok: true };
   };
