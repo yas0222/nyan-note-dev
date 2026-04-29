@@ -84,7 +84,7 @@ const PREFECTURES = [
   "沖縄県",
 ];
 
-const FIREBASE_CONFIG = {
+const devFirebaseConfig = {
   apiKey: "AIzaSyDUYc5v-PUck-r6yj2xiWeW2HlwQaGrviE",
   authDomain: "nyan-note-dev.firebaseapp.com",
   projectId: "nyan-note-dev",
@@ -113,7 +113,7 @@ function hasFirebaseConfig(config) {
 }
 
 function createFirestoreGateway() {
-  if (!hasFirebaseConfig(FIREBASE_CONFIG)) {
+  if (!hasFirebaseConfig(devFirebaseConfig)) {
     return {
       enabled: false,
       db: null,
@@ -132,7 +132,7 @@ function createFirestoreGateway() {
     if (!firebaseSdk) {
       throw new Error("Firebase SDKが読み込まれていません");
     }
-    firebaseSdk.apps.length ? firebaseSdk.app() : firebaseSdk.initializeApp(FIREBASE_CONFIG);
+    firebaseSdk.apps.length ? firebaseSdk.app() : firebaseSdk.initializeApp(devFirebaseConfig);
     const db = firebaseSdk.firestore();
     const auth = typeof firebaseSdk.auth === "function" ? firebaseSdk.auth() : null;
     return {
