@@ -693,6 +693,14 @@ function CatHealthApp() {
     lastRecordCatId: "未実行",
     lastRecordDate: "未実行",
     lastRecordWriteMode: "未実行",
+    lastRecordDocExists: "未実行",
+    lastRecordExistingOwnerUid: "未実行",
+    lastRecordAuthTokenUid: "未実行",
+    lastAuthAppName: firestoreGateway.auth?.app?.name || "未取得",
+    lastDbAppName: firestoreGateway.db?.app?.name || "未取得",
+    lastAuthProjectId: firestoreGateway.auth?.app?.options?.projectId || "未取得",
+    lastDbProjectId: firestoreGateway.db?.app?.options?.projectId || "未取得",
+    lastRecordPath: "未実行",
     lastErrorCode: firestoreGateway.initErrorCode || "",
     lastErrorMessage: firestoreGateway.initErrorMessage || "",
   }));
@@ -775,16 +783,15 @@ function CatHealthApp() {
     if (!firestoreGateway.enabled || !firestoreGateway.auth) {
       throw { code: "auth/not-available", message: "Firebase Authが初期化されていません" };
     }
-    if (firestoreGateway.auth.currentUser?.uid) {
-      const uid = firestoreGateway.auth.currentUser.uid;
-      setAuthOwnerUid(uid);
-      return uid;
+    if (!firestoreGateway.auth.currentUser?.uid) {
+      await firestoreGateway.auth.signInAnonymously();
     }
-    const result = await firestoreGateway.auth.signInAnonymously();
-    const uid = result?.user?.uid || firestoreGateway.auth.currentUser?.uid || "";
+    const currentUser = firestoreGateway.auth.currentUser;
+    const uid = currentUser?.uid || "";
     if (!uid) {
       throw { code: "auth/uid-missing", message: "匿名ログイン後にuidを取得できませんでした" };
     }
+    await currentUser.getIdToken(true);
     setAuthOwnerUid(uid);
     return uid;
   }, [firestoreGateway]);
@@ -857,6 +864,10 @@ function CatHealthApp() {
 
   const saveRecordToCloud = async (record, catId) => {
     let resolvedOwnerUid = "";
+    let recordPath = "";
+    let existingDocExists = false;
+    let existingOwnerUid = "";
+    let authTokenUid = "";
     const collectionName = "records";
     const recordDate = record?.date || todayKey();
     const recordId = `record_v2_${resolvedOwnerUid || "pending"}_${String(catId)}_${recordDate}`;
@@ -875,10 +886,26 @@ function CatHealthApp() {
       resolvedOwnerUid = await ensureAuthenticatedUid();
       const safeRecordId = `record_v2_${resolvedOwnerUid}_${String(catId)}_${recordDate}`;
       const recordRef = firestoreGateway.db.collection(collectionName).doc(safeRecordId);
+      const currentUser = firestoreGateway.auth?.currentUser || null;
+      const tokenResult = currentUser ? await currentUser.getIdTokenResult() : null;
+      authTokenUid = tokenResult?.claims?.user_id || tokenResult?.claims?.sub || "";
+      recordPath = `${collectionName}/${safeRecordId}`;
       const existingSnapshot = await recordRef.get();
+      existingDocExists = existingSnapshot.exists;
+      const existingData = existingSnapshot.exists ? existingSnapshot.data() || {} : {};
+      existingOwnerUid = typeof existingData.ownerUid === "string" ? existingData.ownerUid : "";
+      console.log("[Firestore] 日次記録保存前診断", {
+        authUid: currentUser?.uid || "",
+        authTokenUid: tokenResult?.claims?.user_id || tokenResult?.claims?.sub || "",
+        authAppName: firestoreGateway.auth?.app?.name || "",
+        dbAppName: firestoreGateway.db?.app?.name || "",
+        authProjectId: firestoreGateway.auth?.app?.options?.projectId || "",
+        dbProjectId: firestoreGateway.db?.app?.options?.projectId || "",
+        recordPath,
+        recordDocExists: existingSnapshot.exists,
+        existingOwnerUid,
+      });
       if (existingSnapshot.exists) {
-        const existingData = existingSnapshot.data() || {};
-        const existingOwnerUid = typeof existingData.ownerUid === "string" ? existingData.ownerUid : "";
         if (existingOwnerUid && existingOwnerUid !== resolvedOwnerUid) {
           throw {
             code: "records/owner-mismatch",
@@ -897,6 +924,14 @@ function CatHealthApp() {
         lastRecordCatId: String(catId),
         lastRecordDate: recordDate,
         lastRecordWriteMode: operation,
+        lastRecordDocExists: existingDocExists ? "true" : "false",
+        lastRecordExistingOwnerUid: existingOwnerUid || "なし",
+        lastRecordAuthTokenUid: authTokenUid,
+        lastAuthAppName: firestoreGateway.auth?.app?.name || "",
+        lastDbAppName: firestoreGateway.db?.app?.name || "",
+        lastAuthProjectId: firestoreGateway.auth?.app?.options?.projectId || "",
+        lastDbProjectId: firestoreGateway.db?.app?.options?.projectId || "",
+        lastRecordPath: recordPath,
       }));
       setFirebaseStatus("Firebase保存可能");
       updateFirestoreSaveDebug("日次記録", true, resolvedOwnerUid);
@@ -926,6 +961,14 @@ function CatHealthApp() {
         lastRecordCatId: String(catId),
         lastRecordDate: recordDate,
         lastRecordWriteMode: operation,
+        lastRecordDocExists: existingDocExists ? "true" : "false",
+        lastRecordExistingOwnerUid: existingOwnerUid || "なし",
+        lastRecordAuthTokenUid: authTokenUid,
+        lastAuthAppName: firestoreGateway.auth?.app?.name || "",
+        lastDbAppName: firestoreGateway.db?.app?.name || "",
+        lastAuthProjectId: firestoreGateway.auth?.app?.options?.projectId || "",
+        lastDbProjectId: firestoreGateway.db?.app?.options?.projectId || "",
+        lastRecordPath: recordPath,
       }));
       updateFirestoreSaveDebug("日次記録", false, resolvedOwnerUid, details.code, details.message);
       return {
@@ -2003,6 +2046,12 @@ function HomeView({
               <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録の recordId: {firebaseDebug.lastRecordId}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録保存時 auth.currentUser.uid: {firebaseDebug.lastRecordAuthUid}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録 payload.ownerUid: {firebaseDebug.lastRecordPayloadOwnerUid}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>auth.app.name / db.app.name: {firebaseDebug.lastAuthAppName} / {firebaseDebug.lastDbAppName}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>auth.projectId / db.projectId: {firebaseDebug.lastAuthProjectId} / {firebaseDebug.lastDbProjectId}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録保存 path: {firebaseDebug.lastRecordPath}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>recordDocExists: {firebaseDebug.lastRecordDocExists}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>existingOwnerUid: {firebaseDebug.lastRecordExistingOwnerUid}</div>
+              <div style={{ fontSize: 11, color: palette.inkSoft }}>ID Token uid相当: {firebaseDebug.lastRecordAuthTokenUid}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録 catId: {firebaseDebug.lastRecordCatId}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録 recordDate: {firebaseDebug.lastRecordDate}</div>
               <div style={{ fontSize: 11, color: palette.inkSoft }}>日次記録の保存方式: {firebaseDebug.lastRecordWriteMode}</div>
