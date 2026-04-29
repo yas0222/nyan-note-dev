@@ -13,9 +13,9 @@ import {
   Utensils,
 } from "lucide-react";
 
-const STORAGE_KEY = "nyan-note-prototype-v1";
-const ANONYMOUS_OWNER_ID_KEY = "nyan-note-anonymous-owner-id-v1";
-const PRIVACY_ACCEPTED_KEY = "nyan-note-privacy-accepted-v1";
+const STORAGE_KEY = "nyan-note-dev-prototype-v1";
+const ANONYMOUS_OWNER_ID_KEY = "nyan-note-dev-anonymous-owner-id-v1";
+const PRIVACY_ACCEPTED_KEY = "nyan-note-dev-privacy-accepted-v1";
 const SHOW_DEV_MENU_IN_PUBLIC = false;
 
 function safeLocalStorageGet(key) {
