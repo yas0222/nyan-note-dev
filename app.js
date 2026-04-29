@@ -1800,6 +1800,20 @@ function HomeView({
         >
           プライバシーポリシーを見る
         </a>
+        <a
+          href="./terms.html"
+          style={{
+            display: "inline-block",
+            marginTop: 8,
+            marginLeft: 10,
+            fontSize: 12,
+            color: palette.accent,
+            textDecoration: "underline",
+            fontWeight: 700,
+          }}
+        >
+          利用規約を見る
+        </a>
       </div>
 
       {SHOW_DEV_MENU_IN_PUBLIC && <div style={devMenuCardStyle}>
