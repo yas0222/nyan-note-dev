@@ -2596,6 +2596,7 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
 }
 
 function StatsView({ firestoreGateway, authOwnerUid, authStatus, reloadToken }) {
+  const HIDDEN_PREFECTURE_LABEL = "非公開・未設定";
   const [publicCats, setPublicCats] = useState([]);
   const [loadState, setLoadState] = useState("idle");
   const [isLoading, setIsLoading] = useState(false);
@@ -2662,9 +2663,10 @@ function StatsView({ firestoreGateway, authOwnerUid, authStatus, reloadToken }) 
     const coatPatternCount = {};
 
     publicCats.forEach((cat) => {
-      if (cat.publicRegionLevel !== "none" && cat.prefecture) {
-        prefectureCount[cat.prefecture] = (prefectureCount[cat.prefecture] || 0) + 1;
-      }
+      const normalizedPrefecture = typeof cat.prefecture === "string" ? cat.prefecture.trim() : "";
+      const prefectureLabel =
+        cat.publicRegionLevel === "none" || !normalizedPrefecture ? HIDDEN_PREFECTURE_LABEL : normalizedPrefecture;
+      prefectureCount[prefectureLabel] = (prefectureCount[prefectureLabel] || 0) + 1;
 
       if (!Number.isFinite(cat.age) || cat.age < 0) {
         ageCount["不明"] += 1;
@@ -2723,7 +2725,12 @@ function StatsView({ firestoreGateway, authOwnerUid, authStatus, reloadToken }) 
             </div>
           </div>
 
-          <StatsBarCard title="都道府県別の公開猫ちゃん数" rows={stats.prefectureRows} emptyText="地域公開の猫ちゃんがまだいません" />
+          <StatsBarCard
+            title="都道府県別の公開猫ちゃん数"
+            rows={stats.prefectureRows}
+            emptyText="都道府県データがまだありません"
+            note="都道府県を公開していない猫ちゃんは『非公開・未設定』として集計しています"
+          />
           <StatsBarCard title="年齢分布" rows={stats.ageRows} emptyText="年齢データがまだありません" />
           <StatsBarCard title="性別分布" rows={stats.sexRows} emptyText="性別データがまだありません" />
           <StatsBarCard title="毛柄分布" rows={stats.coatPatternRows} emptyText="毛柄データがまだありません" />
@@ -2733,7 +2740,7 @@ function StatsView({ firestoreGateway, authOwnerUid, authStatus, reloadToken }) 
   );
 }
 
-function StatsBarCard({ title, rows, emptyText }) {
+function StatsBarCard({ title, rows, emptyText, note = "" }) {
   const max = rows.reduce((acc, [, count]) => (count > acc ? count : acc), 0);
   return (
     <div style={cardStyle}>
@@ -2756,6 +2763,7 @@ function StatsBarCard({ title, rows, emptyText }) {
           })}
         </div>
       )}
+      {note ? <div style={{ marginTop: 8, fontSize: 11, color: palette.inkSoft }}>{note}</div> : null}
     </div>
   );
 }
