@@ -2596,7 +2596,7 @@ function CommunityView({ firestoreGateway, authOwnerUid, authStatus, onUpdatePub
 }
 
 function StatsView({ firestoreGateway, authOwnerUid, authStatus, reloadToken }) {
-  const HIDDEN_PREFECTURE_LABEL = "非公開・未設定";
+  const HIDDEN_PREFECTURE_LABEL = "非公開";
   const [publicCats, setPublicCats] = useState([]);
   const [loadState, setLoadState] = useState("idle");
   const [isLoading, setIsLoading] = useState(false);
@@ -2729,7 +2729,7 @@ function StatsView({ firestoreGateway, authOwnerUid, authStatus, reloadToken }) 
             title="都道府県別の公開猫ちゃん数"
             rows={stats.prefectureRows}
             emptyText="都道府県データがまだありません"
-            note="都道府県を公開していない猫ちゃんは『非公開・未設定』として集計しています"
+            note="都道府県を公開していない猫ちゃんは『非公開』として集計しています"
           />
           <StatsBarCard title="年齢分布" rows={stats.ageRows} emptyText="年齢データがまだありません" />
           <StatsBarCard title="性別分布" rows={stats.sexRows} emptyText="性別データがまだありません" />
