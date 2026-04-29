@@ -1814,6 +1814,22 @@ function HomeView({
         >
           利用規約を見る
         </a>
+        <a
+          href="https://forms.gle/xH5jHSFsTLmWsDLw9"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-block",
+            marginTop: 8,
+            marginLeft: 10,
+            fontSize: 12,
+            color: palette.accent,
+            textDecoration: "underline",
+            fontWeight: 700,
+          }}
+        >
+          ご意見・不具合報告はこちら
+        </a>
         <div style={{ marginTop: 8, fontSize: 11, color: palette.inkSoft, lineHeight: 1.4 }}>
           現在β版です。表示や機能は予告なく変更される場合があります。
         </div>
