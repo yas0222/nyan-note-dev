@@ -1814,6 +1814,9 @@ function HomeView({
         >
           利用規約を見る
         </a>
+        <div style={{ marginTop: 8, fontSize: 11, color: palette.inkSoft, lineHeight: 1.4 }}>
+          現在β版です。表示や機能は予告なく変更される場合があります。
+        </div>
       </div>
 
       {SHOW_DEV_MENU_IN_PUBLIC && <div style={devMenuCardStyle}>
